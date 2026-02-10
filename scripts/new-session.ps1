@@ -15,6 +15,27 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Resolve-MainWorktreeRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$StartDir
+    )
+
+    $resolved = (Resolve-Path $StartDir).Path
+    try {
+        $lines = @(git -C $resolved worktree list --porcelain 2>$null)
+        foreach ($line in $lines) {
+            if ($line -like "worktree *") {
+                return ($line.Substring(9)).Trim()
+            }
+        }
+    }
+    catch {
+        # Fall back to the current worktree root if git is unavailable.
+    }
+
+    return $resolved
+}
+
 function Copy-TemplateFile {
     param(
         [Parameter(Mandatory = $true)][string]$TemplatePath,
@@ -93,6 +114,7 @@ function Add-RoleWorktree {
     }
 }
 
+$RepoRoot = Resolve-MainWorktreeRoot -StartDir $RepoRoot
 $RepoRoot = (Resolve-Path $RepoRoot).Path
 if (-not (Test-Path (Join-Path $RepoRoot ".git"))) {
     throw "RepoRoot is not a git repository: $RepoRoot"
@@ -103,7 +125,7 @@ if (-not $sessionId) {
     throw "SessionName contains no valid characters."
 }
 
-$sessionRoot = Join-Path $RepoRoot "sessions\$sessionId"
+$sessionRoot = Join-Path (Join-Path $RepoRoot "sessions") $sessionId
 if (Test-Path $sessionRoot) {
     throw "Session already exists: $sessionRoot"
 }
@@ -113,8 +135,8 @@ if ($WithBuilderB) {
     $roles += "builder-b"
 }
 
-$templateRoot = Join-Path $RepoRoot "docs\templates"
-$promptRoot = Join-Path $RepoRoot "docs\prompts"
+$templateRoot = Join-Path (Join-Path $RepoRoot "docs") "templates"
+$promptRoot = Join-Path (Join-Path $RepoRoot "docs") "prompts"
 
 New-Item -ItemType Directory -Path $sessionRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $sessionRoot "shared") -Force | Out-Null
@@ -128,11 +150,12 @@ $baseVars = @{
 }
 
 foreach ($name in @("task", "decision", "verify", "pitfalls", "journal")) {
-    Copy-TemplateFile -TemplatePath (Join-Path $templateRoot "$name.md") -OutputPath (Join-Path $sessionRoot "shared\$name.md") -Vars $baseVars
+    $sharedDir = Join-Path $sessionRoot "shared"
+    Copy-TemplateFile -TemplatePath (Join-Path $templateRoot "$name.md") -OutputPath (Join-Path $sharedDir "$name.md") -Vars $baseVars
 }
 
 foreach ($role in $roles) {
-    $roleRoot = Join-Path $sessionRoot "roles\$role"
+    $roleRoot = Join-Path (Join-Path $sessionRoot "roles") $role
     New-Item -ItemType Directory -Path $roleRoot -Force | Out-Null
 
     $roleVars = @{}
@@ -152,7 +175,8 @@ foreach ($role in $roles) {
 }
 
 $promptLines = $roles | ForEach-Object {
-    "- $($_): `"$sessionRoot\roles\$($_)\prompt.md`""
+    $p = Join-Path (Join-Path (Join-Path $sessionRoot "roles") $_) "prompt.md"
+    "- $($_): `"$p`""
 }
 $bootLines = $roles | ForEach-Object {
     "- $($_): `"cd <worktree-for-$($_)>; codex`""
@@ -164,7 +188,7 @@ $sessionGuide = @"
 ## Paths
 
 - Session root: $sessionRoot
-- Shared context: $sessionRoot\shared
+- Shared context: $(Join-Path $sessionRoot "shared")
 
 ## Role prompt files
 $($promptLines -join "`n")
@@ -175,11 +199,11 @@ $($bootLines -join "`n")
 ## Logging examples
 
 ~~~powershell
-.\scripts\log-entry.ps1 -SessionName $sessionId -Role lead -Channel worklog -Status doing -Message "派工已发出" -Evidence "roles\\builder-a\\inbox.md" -NextAction "等待 builder-a outbox"
+pwsh ./scripts/log-entry.ps1 -SessionName $sessionId -Role lead -Channel worklog -Status doing -Message "派工已发出" -Evidence "roles/builder-a/inbox.md" -NextAction "等待 builder-a outbox"
 ~~~
 
 ~~~powershell
-.\scripts\dispatch.ps1 -SessionName $sessionId -Role builder-a -Message "实现最小改动方案" -Acceptance "pytest tests/test_xxx.py 通过"
+pwsh ./scripts/dispatch.ps1 -SessionName $sessionId -Role builder-a -Message "实现最小改动方案" -Acceptance "pytest tests/test_xxx.py 通过"
 ~~~
 "@
 
@@ -194,10 +218,22 @@ if ($CreateWorktrees) {
         Add-RoleWorktree -Repo $RepoRoot -WorktreeRoot $worktreeRoot -SessionId $sessionId -Role $role -Base $base
     }
 
-    Add-Content -Path (Join-Path $sessionRoot "SESSION.md") -Value "`n## Worktree root`n- $worktreeRoot`n" -Encoding utf8
+    $worktreeLines = $roles | ForEach-Object {
+        $p = Join-Path $worktreeRoot $_
+        "- $($_): $p"
+    }
+
+    $worktreeSection = @"
+
+## Worktree root
+- $worktreeRoot
+
+## Role worktrees
+$($worktreeLines -join "`n")
+"@
+
+    Add-Content -Path (Join-Path $sessionRoot "SESSION.md") -Value $worktreeSection -Encoding utf8
 }
 
 Write-Host "Session created: $sessionRoot" -ForegroundColor Green
-Write-Host "Open: $sessionRoot\SESSION.md" -ForegroundColor Green
-
-
+Write-Host ("Open: " + (Join-Path $sessionRoot "SESSION.md")) -ForegroundColor Green

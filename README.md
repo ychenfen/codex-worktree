@@ -18,22 +18,27 @@
 
 ## 快速开始
 
+前置条件：
+- 安装 Git（用于 `git worktree`）。
+- 安装 PowerShell 7（命令为 `pwsh`，Windows/macOS/Linux 均可）。
+- 脚本会自动定位到“主 worktree”（`git worktree list` 的第一项），所以你可以在任意角色 worktree 内运行 `scripts/*.ps1`，会话目录仍会落在主 worktree 的 `sessions/` 下。
+
 1. 在仓库根目录创建会话
 
 ```powershell
-.\scripts\new-session.ps1 -SessionName feature-login -CreateWorktrees
+pwsh ./scripts/new-session.ps1 -SessionName feature-login -CreateWorktrees
 ```
 
 2. 如果要双 Builder 竞争方案
 
 ```powershell
-.\scripts\new-session.ps1 -SessionName feature-login -CreateWorktrees -WithBuilderB
+pwsh ./scripts/new-session.ps1 -SessionName feature-login -CreateWorktrees -WithBuilderB
 ```
 
 3. 打开会话指引
 
 ```powershell
-Get-Content .\sessions\feature-login\SESSION.md
+Get-Content ./sessions/feature-login/SESSION.md
 ```
 
 `SESSION.md` 里会给出：
@@ -86,25 +91,25 @@ Get-Content .\sessions\feature-login\SESSION.md
 创建会话：
 
 ```powershell
-.\scripts\new-session.ps1 -SessionName fix-uds-timeout -CreateWorktrees -WithBuilderB
+pwsh ./scripts/new-session.ps1 -SessionName fix-uds-timeout -CreateWorktrees -WithBuilderB
 ```
 
 Lead 派工：
 
 ```powershell
-.\scripts\dispatch.ps1 -SessionName fix-uds-timeout -Role builder-a -Message "修复 UDS 超时重试" -Acceptance "测试用例 test_uds_retry 通过"
+pwsh ./scripts/dispatch.ps1 -SessionName fix-uds-timeout -Role builder-a -Message "修复 UDS 超时重试" -Acceptance "测试用例 test_uds_retry 通过"
 ```
 
 任意角色追加日志：
 
 ```powershell
-.\scripts\log-entry.ps1 -SessionName fix-uds-timeout -Role builder-a -Channel worklog -Status doing -Message "开始实现重试逻辑" -Evidence "src/uds/client.py"
+pwsh ./scripts/log-entry.ps1 -SessionName fix-uds-timeout -Role builder-a -Channel worklog -Status doing -Message "开始实现重试逻辑" -Evidence "src/uds/client.py"
 ```
 
 会话健康检查：
 
 ```powershell
-.\scripts\check-session.ps1 -SessionName fix-uds-timeout
+pwsh ./scripts/check-session.ps1 -SessionName fix-uds-timeout
 ```
 
 ## 对话隔离规则（强约束）
@@ -127,14 +132,13 @@ Lead 派工：
 ```powershell
 git add .
 git commit -m "feat: add isolated multi-role codex workflow"
-git branch -M main
 git remote add origin https://github.com/ychenfen/codex-worktree.git  # 已存在则跳过
-git push -u origin main
+git push -u origin HEAD
 ```
 
-如果远端已有历史，请先拉取并 rebase：
+如果远端已有历史，请先拉取并 rebase（把 `<default-branch>` 替换成远端默认分支，通常是 `main` 或 `master`）：
 
 ```powershell
 git fetch origin
-git rebase origin/main
+git rebase origin/<default-branch>
 ```

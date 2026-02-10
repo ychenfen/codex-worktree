@@ -18,12 +18,36 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$sessionRoot = Join-Path $RepoRoot "sessions\$SessionName"
+function Resolve-MainWorktreeRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$StartDir
+    )
+
+    $resolved = (Resolve-Path $StartDir).Path
+    try {
+        $lines = @(git -C $resolved worktree list --porcelain 2>$null)
+        foreach ($line in $lines) {
+            if ($line -like "worktree *") {
+                return ($line.Substring(9)).Trim()
+            }
+        }
+    }
+    catch {
+        # Fall back to the current worktree root if git is unavailable.
+    }
+
+    return $resolved
+}
+
+$RepoRoot = Resolve-MainWorktreeRoot -StartDir $RepoRoot
+$RepoRoot = (Resolve-Path $RepoRoot).Path
+
+$sessionRoot = Join-Path (Join-Path $RepoRoot "sessions") $SessionName
 if (-not (Test-Path $sessionRoot)) {
     throw "Session not found: $sessionRoot"
 }
 
-$inboxPath = Join-Path $sessionRoot "roles\$Role\inbox.md"
+$inboxPath = Join-Path (Join-Path (Join-Path $sessionRoot "roles") $Role) "inbox.md"
 if (-not (Test-Path $inboxPath)) {
     throw "Inbox not found: $inboxPath"
 }

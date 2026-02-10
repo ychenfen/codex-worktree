@@ -9,7 +9,31 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$sessionRoot = Join-Path $RepoRoot "sessions\$SessionName"
+function Resolve-MainWorktreeRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$StartDir
+    )
+
+    $resolved = (Resolve-Path $StartDir).Path
+    try {
+        $lines = @(git -C $resolved worktree list --porcelain 2>$null)
+        foreach ($line in $lines) {
+            if ($line -like "worktree *") {
+                return ($line.Substring(9)).Trim()
+            }
+        }
+    }
+    catch {
+        # Fall back to the current worktree root if git is unavailable.
+    }
+
+    return $resolved
+}
+
+$RepoRoot = Resolve-MainWorktreeRoot -StartDir $RepoRoot
+$RepoRoot = (Resolve-Path $RepoRoot).Path
+
+$sessionRoot = Join-Path (Join-Path $RepoRoot "sessions") $SessionName
 if (-not (Test-Path $sessionRoot)) {
     throw "Session not found: $sessionRoot"
 }
@@ -18,7 +42,7 @@ $errors = @()
 $warnings = @()
 
 foreach ($f in @("task.md", "decision.md", "verify.md", "pitfalls.md", "journal.md")) {
-    $p = Join-Path $sessionRoot "shared\$f"
+    $p = Join-Path (Join-Path $sessionRoot "shared") $f
     if (-not (Test-Path $p)) {
         $errors += "Missing shared file: $p"
     }
@@ -40,14 +64,14 @@ if ($roles.Count -eq 0) {
 
 foreach ($role in $roles) {
     foreach ($f in @("inbox.md", "outbox.md", "worklog.md", "prompt.md")) {
-        $p = Join-Path $sessionRoot "roles\$role\$f"
+        $p = Join-Path (Join-Path (Join-Path $sessionRoot "roles") $role) $f
         if (-not (Test-Path $p)) {
             $errors += "Missing role file: $p"
         }
     }
 
-    $inbox = Join-Path $sessionRoot "roles\$role\inbox.md"
-    $outbox = Join-Path $sessionRoot "roles\$role\outbox.md"
+    $inbox = Join-Path (Join-Path (Join-Path $sessionRoot "roles") $role) "inbox.md"
+    $outbox = Join-Path (Join-Path (Join-Path $sessionRoot "roles") $role) "outbox.md"
 
     $hasInboxTask = $false
     if (Test-Path $inbox) {
@@ -63,7 +87,7 @@ foreach ($role in $roles) {
     }
 }
 
-$journalPath = Join-Path $sessionRoot "shared\journal.md"
+$journalPath = Join-Path (Join-Path $sessionRoot "shared") "journal.md"
 if (Test-Path $journalPath) {
     $journal = Get-Content -Path $journalPath -Raw -Encoding utf8
     if (-not ($journal -match "\|\s*Task\s*\|\s*Owner\s*\|\s*Status\s*\|")) {
