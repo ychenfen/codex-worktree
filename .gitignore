@@ -13,3 +13,15 @@ sessions/*/artifacts/*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Node artifacts
+node_modules/
+packages/*/node_modules/
+packages/*/dist/
+
+
+# codex-team runtime generated files
+.codex-team/
+roles/
+templates/
+
