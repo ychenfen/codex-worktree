@@ -26,4 +26,16 @@ node dist/cli.js watch --me reviewer --interval 2 --context "issue:demo"
 node dist/cli.js thread --context "issue:demo"
 node dist/cli.js done --latest --me reviewer --summary "done" --artifacts "decision.md"
 node dist/cli.js auto --me builder-a --interval 3 --context "issue:demo"
+node dist/cli.js orchestrate --context "issue:demo" --with-builder-b --interval 3
+node dist/cli.js orchestrate --stop --context "issue:demo"
+```
+
+Recommended start flow:
+
+```bash
+node dist/cli.js init
+node dist/cli.js orchestrate --context "issue:demo" --with-builder-b --interval 3
+# lead sends tasks via send/broadcast
+node dist/cli.js thread --context "issue:demo"
+node dist/cli.js orchestrate --stop --context "issue:demo"
 ```

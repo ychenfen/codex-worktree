@@ -3,6 +3,7 @@ import os from "node:os";
 import { runInit } from "./core/init.js";
 import { runUp } from "./core/up.js";
 import { runSend, runInbox, runDone, runWatch, runBroadcast, runThread, runDoneByOrder, runAuto } from "./core/bus.js";
+import { runOrchestrateStart, runOrchestrateStop } from "./core/orchestrate.js";
 import { findRepoRoot } from "./utils/paths.js";
 
 interface ParsedArgs {
@@ -46,7 +47,7 @@ function getOptionalStringFlag(parsed: ParsedArgs, key: string): string | undefi
 }
 
 function printHelp(): void {
-  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  broadcast --to <role1,role2,...> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  watch --me <role> [--interval <seconds>] [--type <TYPE>] [--context <id>]\n  thread --context <id>\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n  done --latest|--oldest --me <role> --summary <text> [--type <TYPE>] [--context <id>] [--artifacts <text>] [--from <name>]\n  auto --me <role> [--interval <seconds>] [--once] [--type <TYPE>] [--context <id>] [--model <name>] [--no-full-auto]\n`);
+  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  broadcast --to <role1,role2,...> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  watch --me <role> [--interval <seconds>] [--type <TYPE>] [--context <id>]\n  thread --context <id>\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n  done --latest|--oldest --me <role> --summary <text> [--type <TYPE>] [--context <id>] [--artifacts <text>] [--from <name>]\n  auto --me <role> [--interval <seconds>] [--once] [--type <TYPE>] [--context <id>] [--model <name>] [--no-full-auto]\n  orchestrate --context <id> [--with-builder-b] [--interval <seconds>] [--model <name>] [--no-full-auto] [--lead]\n  orchestrate --stop --context <id>\n`);
 }
 
 function normalizeLayout(value: string | boolean | undefined): "quad" {
@@ -181,6 +182,35 @@ function main(): void {
         contextFilter,
         model,
         fullAuto: !noFullAuto,
+      });
+      break;
+    }
+    case "orchestrate": {
+      const context = requireStringFlag(parsed, "context");
+      const stop = Boolean(parsed.flags.stop);
+      if (stop) {
+        runOrchestrateStop(repoRoot, context);
+        break;
+      }
+
+      const withBuilderB = Boolean(parsed.flags["with-builder-b"]);
+      const intervalRaw = parsed.flags.interval;
+      const interval = typeof intervalRaw === "string" ? Number(intervalRaw) : 5;
+      if (!Number.isFinite(interval) || interval < 1) {
+        throw new Error("Invalid --interval, use an integer >= 1.");
+      }
+
+      const model = getOptionalStringFlag(parsed, "model");
+      const noFullAuto = Boolean(parsed.flags["no-full-auto"]);
+      const lead = Boolean(parsed.flags.lead);
+
+      runOrchestrateStart(repoRoot, {
+        context,
+        withBuilderB,
+        intervalSec: interval,
+        model,
+        fullAuto: !noFullAuto,
+        includeLead: lead,
       });
       break;
     }

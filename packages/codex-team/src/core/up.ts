@@ -90,7 +90,10 @@ export function runUp(repoRoot: string, options: UpOptions): void {
     roleToPath[spec.role] = ensureWorktree(repoRoot, spec);
   }
 
-  launchTerminal(roleToPath, options.withBuilderB);
+  const shouldLaunchTerminal = options.launchTerminal !== false;
+  if (shouldLaunchTerminal) {
+    launchTerminal(roleToPath, options.withBuilderB);
+  }
 
   console.log("codex-team up completed");
   console.log(`ctx_dir: ${config.ctxDir}`);

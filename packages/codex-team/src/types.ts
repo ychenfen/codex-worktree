@@ -25,6 +25,7 @@ export interface CodexTeamConfig {
 export interface UpOptions {
   layout: "quad";
   withBuilderB: boolean;
+  launchTerminal?: boolean;
 }
 
 export interface SendOptions {

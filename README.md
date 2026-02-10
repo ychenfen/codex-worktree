@@ -18,6 +18,7 @@
 - `codex-team thread`
 - `codex-team done`（支持 `--msg` 或 `--latest/--oldest --me`）
 - `codex-team auto`（自动消费 bus 消息并调用 `codex exec` 处理）
+- `codex-team orchestrate`（一键拉起多角色 auto worker，Lead 单独决策）
 
 消息类型：`TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE`
 
@@ -90,6 +91,18 @@ node .\packages\codex-team\dist\cli.js done --latest --me reviewer --summary "�
 
 ```powershell
 node .\packages\codex-team\dist\cli.js auto --me builder-a --interval 3 --context "issue:login-retry"
+```
+
+10. 一键编排启动（推荐）：
+
+```powershell
+node .\packages\codex-team\dist\cli.js orchestrate --context "issue:login-retry" --with-builder-b --interval 3
+```
+
+停止编排：
+
+```powershell
+node .\packages\codex-team\dist\cli.js orchestrate --stop --context "issue:login-retry"
 ```
 
 ## 四窗口到底有什么用
