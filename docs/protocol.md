@@ -11,6 +11,7 @@
 1. Create
 - 运行 `scripts/new-session.ps1`
 - 生成 shared 与 role mailbox 结构
+- 提示：脚本会自动定位到“主 worktree”（`git worktree list` 的第一项），确保多 worktree 场景下会话目录只有一份。
 
 2. Dispatch
 - Lead 将子任务写入目标角色 `inbox.md`
