@@ -1,138 +1,113 @@
 ﻿# codex-worktree
 
-一个面向 Codex CLI 的多角色并行协作模板，目标是把以下三件事做成可复用流程：
+跨平台（Windows + macOS）单机多角色 Codex 协作工具。
 
-- 多角色并行（Lead / Builder-A / Reviewer / Tester，可选 Builder-B 竞争）
-- 对话隔离（每个角色独立 inbox/outbox/worklog，禁止直接串线）
-- 全程 Markdown 留痕（任务、决策、验证、日志都可审计）
+## 当前状态
 
-## 为什么这版更稳
+- 新路线：`packages/codex-team`（Node.js + TypeScript CLI）
+- 旧原型：`scripts/*.ps1`（保留，不再继续扩展功能）
 
-原始做法里最常见问题是：`git worktree` 彼此文件不共享，导致所谓 `ctx/*.md` 实际被拆成多份，角色无法正确交接。
+## 功能概览
 
-这版默认采用 **会话中心目录**：
+`codex-team` 提供以下命令：
 
-- `sessions/<session-id>/shared/*`：共享事实来源（task/decision/verify/pitfalls/journal）
-- `sessions/<session-id>/roles/<role>/*`：角色专属收件箱、发件箱、工作日志
-- 角色只通过 Markdown 文件交接，不靠口头上下文
+- `codex-team init`
+  - 生成 `.codex-team/config.json`
+  - 在 repo 外创建共享上下文目录（默认 `%USERPROFILE%\\codex-ctx` / `$HOME/codex-ctx`）
+  - 初始化 `task.md` / `decision.md` / `verify.md` / `pitfalls.md` / `journal.md`
+  - 创建 `bus/`、`logs/`
+  - 在 repo 内生成 `roles/ROLE_*.md` 和 `templates/`
 
-## 快速开始
+- `codex-team up [--layout quad] [--with-builder-b]`
+  - 创建/检查 `main` 分支与角色 worktree
+  - Windows: 使用 `wt` 四格启动 `codex`
+  - macOS: 使用 iTerm2 AppleScript 四格启动 `codex`
 
-1. 在仓库根目录创建会话
+- `codex-team send/inbox/done`
+  - 基于 `ctx_dir/bus` 的文件总线互相调用与通知
+  - 固定消息格式：
+    - `From:`
+    - `To:`
+    - `Type:`
+    - `Context:`
+    - `Action:`
+    - `Reply-to:`
 
-```powershell
-.\scripts\new-session.ps1 -SessionName feature-login -CreateWorktrees
-```
-
-2. 如果要双 Builder 竞争方案
-
-```powershell
-.\scripts\new-session.ps1 -SessionName feature-login -CreateWorktrees -WithBuilderB
-```
-
-3. 打开会话指引
-
-```powershell
-Get-Content .\sessions\feature-login\SESSION.md
-```
-
-`SESSION.md` 里会给出：
-
-- 每个角色建议使用的 worktree 路径
-- 每个角色要粘贴的 prompt 文件路径
-- 日志记录命令样例
-
-## 目录结构
-
-```text
-.
-├─ docs
-│  ├─ prompts
-│  ├─ templates
-│  ├─ protocol.md
-│  └─ task-journal.md
-├─ scripts
-│  ├─ new-session.ps1
-│  ├─ dispatch.ps1
-│  ├─ log-entry.ps1
-│  └─ check-session.ps1
-└─ sessions
-   └─ <session-id>
-      ├─ SESSION.md
-      ├─ shared
-      │  ├─ task.md
-      │  ├─ decision.md
-      │  ├─ verify.md
-      │  ├─ pitfalls.md
-      │  └─ journal.md
-      └─ roles
-         └─ <role>
-            ├─ prompt.md
-            ├─ inbox.md
-            ├─ outbox.md
-            └─ worklog.md
-```
-
-## 协作最小闭环
-
-1. Lead 用 `dispatch.ps1` 派工到某个角色 `inbox.md`
-2. Builder 实现后写 `outbox.md` + `shared/verify.md`
-3. Reviewer 根据 diff 和 outbox 写 `shared/decision.md`
-4. Tester 复验并更新 `shared/verify.md`
-5. Lead 收敛最终决策并在 `shared/journal.md` 记录结论
-
-## 常用命令
-
-创建会话：
+## 安装与构建
 
 ```powershell
-.\scripts\new-session.ps1 -SessionName fix-uds-timeout -CreateWorktrees -WithBuilderB
+cd packages/codex-team
+npm install
+npm run build
 ```
 
-Lead 派工：
+构建后可用：
 
 ```powershell
-.\scripts\dispatch.ps1 -SessionName fix-uds-timeout -Role builder-a -Message "修复 UDS 超时重试" -Acceptance "测试用例 test_uds_retry 通过"
+node dist/cli.js --help
 ```
 
-任意角色追加日志：
+## 最小可用 Demo
+
+### 1) init
 
 ```powershell
-.\scripts\log-entry.ps1 -SessionName fix-uds-timeout -Role builder-a -Channel worklog -Status doing -Message "开始实现重试逻辑" -Evidence "src/uds/client.py"
+node packages/codex-team/dist/cli.js init
 ```
 
-会话健康检查：
+### 2) up
 
 ```powershell
-.\scripts\check-session.ps1 -SessionName fix-uds-timeout
+node packages/codex-team/dist/cli.js up --layout quad
 ```
 
-## 对话隔离规则（强约束）
+启用竞争式双 Builder：
 
-- Builder-A 不读取 Builder-B 的 `inbox/outbox/worklog`，反之亦然。
-- Reviewer/Tester 不改业务代码，只写评审/验证结果。
-- Lead 不直接实现业务代码，只拆解、派工、收敛。
-- 共享结论仅以 `shared/*.md` 为准，口头消息不算。
+```powershell
+node packages/codex-team/dist/cli.js up --layout quad --with-builder-b
+```
 
-## 我建议的增强实践
+### 3) send
 
-- 每个会话单独 `session-id`，不要复用旧目录。
-- 每条关键动作都写日志，并附证据（命令、文件、测试结果）。
-- 竞争式双 Builder 时，用统一对比表收敛：改动面、风险、可测试性、回滚难度、维护成本。
+```powershell
+node packages/codex-team/dist/cli.js send --to reviewer --type REVIEW --action "请审查 builder-a 的最小改动" --context "PR#12"
+```
 
-## 上传到 GitHub
+### 4) inbox
 
-网络可用时执行：
+```powershell
+node packages/codex-team/dist/cli.js inbox --me reviewer
+```
+
+### 5) done
+
+```powershell
+node packages/codex-team/dist/cli.js done --msg 20260210-1400_to_reviewer_REVIEW.md --summary "已完成审查，见 decision.md" --artifacts "decision.md"
+```
+
+## 协作协议（对话隔离）
+
+- 所有角色共享 repo 外 `ctx_dir`
+- 角色之间统一通过 `bus/` 消息文件通知，不靠聊天互 @
+- 每次任务结束在 `journal.md` 追加总结（建议 <=20 行）
+- 角色边界：
+  - Lead：拆解/派工/验收/拍板，不写实现
+  - Builder：只实现，不改任务边界
+  - Reviewer：只审查，不做实现
+  - Tester：只验证，不做实现
+
+## Publishing
+
+网络可用时：
 
 ```powershell
 git add .
-git commit -m "feat: add isolated multi-role codex workflow"
+git commit -m "feat: add cross-platform codex-team cli"
 git branch -M main
-git remote add origin https://github.com/ychenfen/codex-worktree.git  # 已存在则跳过
 git push -u origin main
 ```
 
-如果远端已有历史，请先拉取并 rebase：
+如果远端已有提交：
 
 ```powershell
 git fetch origin

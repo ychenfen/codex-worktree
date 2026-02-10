@@ -1,0 +1,20 @@
+﻿{
+  "name": "codex-team",
+  "version": "0.1.0",
+  "description": "Cross-platform multi-role Codex collaboration CLI",
+  "type": "module",
+  "bin": {
+    "codex-team": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}
