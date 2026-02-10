@@ -7,32 +7,18 @@
 - 新路线：`packages/codex-team`（Node.js + TypeScript CLI）
 - 旧原型：`scripts/*.ps1`（保留，不再继续扩展功能）
 
-## 功能概览
-
-`codex-team` 提供以下命令：
+## 命令总览
 
 - `codex-team init`
-  - 生成 `.codex-team/config.json`
-  - 在 repo 外创建共享上下文目录（默认 `%USERPROFILE%\\codex-ctx` / `$HOME/codex-ctx`）
-  - 初始化 `task.md` / `decision.md` / `verify.md` / `pitfalls.md` / `journal.md`
-  - 创建 `bus/`、`logs/`
-  - 在 repo 内生成 `roles/ROLE_*.md` 和 `templates/`
-
 - `codex-team up [--layout quad] [--with-builder-b]`
-  - 创建/检查 `main` 分支与角色 worktree
-  - Windows: 使用 `wt` 四格启动 `codex`
-  - macOS: 使用 iTerm2 AppleScript 四格启动 `codex`
+- `codex-team send`
+- `codex-team broadcast`
+- `codex-team inbox`
+- `codex-team watch`
+- `codex-team thread`
+- `codex-team done`（支持 `--msg` 或 `--latest/--oldest --me`）
 
-- `codex-team send/inbox/done`
-- `codex-team send/inbox/watch/done`
-  - 基于 `ctx_dir/bus` 的文件总线互相调用与通知
-  - 固定消息格式：
-    - `From:`
-    - `To:`
-    - `Type:`
-    - `Context:`
-    - `Action:`
-    - `Reply-to:`
+消息类型：`TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE`
 
 ## 安装与构建
 
@@ -40,68 +26,80 @@
 cd packages/codex-team
 npm install
 npm run build
+cd ..\..
 ```
 
-构建后可用：
+查看帮助：
 
 ```powershell
-node dist/cli.js --help
+node .\packages\codex-team\dist\cli.js --help
 ```
 
-## 最小可用 Demo
+## 最小可用 Demo（全一行）
 
-### 1) init
+1. 初始化（共享 ctx 在 repo 外）：
 
 ```powershell
-node packages/codex-team/dist/cli.js init
+node .\packages\codex-team\dist\cli.js init --ctx-dir C:\Users\<you>\codex-ctx
 ```
 
-### 2) up
+2. 启动四窗口（可选双 Builder）：
 
 ```powershell
-node packages/codex-team/dist/cli.js up --layout quad
+node .\packages\codex-team\dist\cli.js up --layout quad --with-builder-b
 ```
 
-启用竞争式双 Builder：
+3. 发送单条消息：
 
 ```powershell
-node packages/codex-team/dist/cli.js up --layout quad --with-builder-b
+node .\packages\codex-team\dist\cli.js send --to reviewer --type REVIEW --action "请审查最小改动" --context "issue:login-retry" --from lead
 ```
 
-### 3) send
+4. 广播派工（A/B 同时接任务）：
 
 ```powershell
-node packages/codex-team/dist/cli.js send --to reviewer --type REVIEW --action "请审查 builder-a 的最小改动" --context "PR#12"
+node .\packages\codex-team\dist\cli.js broadcast --to builder-a,builder-b --type TASK --action "同任务双方案竞争" --context "issue:login-retry" --from lead
 ```
 
-### 4) inbox
+5. 实时监听（每个角色建议开一个 watch）：
 
 ```powershell
-node packages/codex-team/dist/cli.js inbox --me reviewer
+node .\packages\codex-team\dist\cli.js watch --me reviewer --interval 2 --context "issue:login-retry"
 ```
 
-### 5) watch（实时监听新消息）
+6. 查看线程（按 context 聚合）：
 
 ```powershell
-node packages/codex-team/dist/cli.js watch --me reviewer --interval 3
+node .\packages\codex-team\dist\cli.js thread --context "issue:login-retry"
 ```
 
-### 6) done
+7. 完成消息（指定文件）：
 
 ```powershell
-node packages/codex-team/dist/cli.js done --msg 20260210-1400_to_reviewer_REVIEW.md --summary "已完成审查，见 decision.md" --artifacts "decision.md"
+node .\packages\codex-team\dist\cli.js done --msg 20260210-1529_to_reviewer_REVIEW.md --summary "审查完成" --artifacts "decision.md" --from reviewer
 ```
 
-## 协作协议（对话隔离）
+8. 完成消息（自动取最新，避免 `$msg`）：
 
-- 所有角色共享 repo 外 `ctx_dir`
-- 角色之间统一通过 `bus/` 消息文件通知，不靠聊天互 @
-- 每次任务结束在 `journal.md` 追加总结（建议 <=20 行）
-- 角色边界：
-  - Lead：拆解/派工/验收/拍板，不写实现
-  - Builder：只实现，不改任务边界
-  - Reviewer：只审查，不做实现
-  - Tester：只验证，不做实现
+```powershell
+node .\packages\codex-team\dist\cli.js done --latest --me reviewer --summary "审查完成" --artifacts "decision.md" --from reviewer
+```
+
+## 四窗口到底有什么用
+
+四窗口的价值不是“自动执行对方会话”，而是：
+
+- 每个角色独立上下文，不互相污染
+- 通过 `bus/` 文件总线进行可追溯协作
+- `watch` 提供实时新消息通知
+- `thread --context` 让竞争交流可回放、可裁决
+
+## 推荐竞争协议（A/B）
+
+- Lead 对 A/B 使用同一个 `--context` 派工
+- A/B 互发 `REVIEW/COMPARE/PROPOSE`，必须带同一 `context`
+- Reviewer 在同一 `context` 下输出对比结论
+- Lead 以 `decision.md` 收敛，Tester 以 `verify.md` 验证
 
 ## Publishing
 

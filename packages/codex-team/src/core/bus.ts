@@ -5,10 +5,17 @@ import { Role, MessageType, SendOptions, MESSAGE_TYPES, ROLES } from "../types.j
 import { listMarkdownFiles, readTextFile, writeTextFile } from "../utils/fs.js";
 import { messageTimestamp, isoTimestamp } from "../utils/time.js";
 
-interface PendingMessage {
+interface BusMessage {
   file: string;
+  fullPath: string;
+  from: string;
+  to: string;
   type: string;
+  context: string;
   action: string;
+  replyTo: string;
+  status: string;
+  createdAt: string;
 }
 
 const SLEEP_ARRAY = new Int32Array(new SharedArrayBuffer(4));
@@ -31,6 +38,40 @@ function parseHeader(content: string, key: string): string {
   return line.slice(line.indexOf(":") + 1).trim();
 }
 
+function parseBusMessage(busDir: string, file: string): BusMessage {
+  const fullPath = path.join(busDir, file);
+  const raw = readTextFile(fullPath);
+  return {
+    file,
+    fullPath,
+    from: parseHeader(raw, "From") || "",
+    to: parseHeader(raw, "To") || "",
+    type: parseHeader(raw, "Type") || "",
+    context: parseHeader(raw, "Context") || "",
+    action: parseHeader(raw, "Action") || "",
+    replyTo: parseHeader(raw, "Reply-to") || "",
+    status: (parseHeader(raw, "Status") || "NEW").toUpperCase(),
+    createdAt: parseHeader(raw, "Created-at") || "",
+  };
+}
+
+function listBusMessages(busDir: string): BusMessage[] {
+  return listMarkdownFiles(busDir)
+    .map((file) => parseBusMessage(busDir, file))
+    .sort((a, b) => a.file.localeCompare(b.file));
+}
+
+function getPendingMessages(busDir: string, me: Role, typeFilter?: string, contextFilter?: string): BusMessage[] {
+  const normalizedType = typeFilter ? typeFilter.toUpperCase() : "";
+
+  return listBusMessages(busDir)
+    .filter((msg) => msg.to === me)
+    .filter((msg) => msg.status !== "DONE")
+    .filter((msg) => !msg.file.toLowerCase().includes("_done"))
+    .filter((msg) => (normalizedType ? msg.type.toUpperCase() === normalizedType : true))
+    .filter((msg) => (contextFilter ? msg.context === contextFilter : true));
+}
+
 function uniqueMessagePath(busDir: string, baseName: string): string {
   const first = path.join(busDir, baseName);
   if (!fs.existsSync(first)) {
@@ -47,28 +88,6 @@ function uniqueMessagePath(busDir: string, baseName: string): string {
   }
 
   throw new Error("Unable to allocate unique bus message filename.");
-}
-
-function getPendingMessages(busDir: string, me: Role): PendingMessage[] {
-  const files = listMarkdownFiles(busDir);
-
-  const matched = files
-    .filter((file) => !file.toLowerCase().includes("_done"))
-    .filter((file) => {
-      const content = readTextFile(path.join(busDir, file));
-      const to = parseHeader(content, "To");
-      const status = parseHeader(content, "Status").toUpperCase();
-      return to === me && status !== "DONE";
-    });
-
-  return matched.map((file) => {
-    const content = readTextFile(path.join(busDir, file));
-    return {
-      file,
-      type: parseHeader(content, "Type") || "N/A",
-      action: parseHeader(content, "Action") || "",
-    };
-  });
 }
 
 function sleepMs(ms: number): void {
@@ -105,6 +124,48 @@ export function runSend(repoRoot: string, options: SendOptions): void {
   console.log(`message_written: ${targetPath}`);
 }
 
+export function runBroadcast(
+  repoRoot: string,
+  toCsv: string,
+  type: string,
+  action: string,
+  context: string,
+  replyTo: string,
+  from: string,
+): void {
+  const targetNames = Array.from(new Set(toCsv.split(",").map((item) => item.trim()).filter(Boolean)));
+
+  if (targetNames.length === 0) {
+    throw new Error("No target roles provided for broadcast.");
+  }
+
+  const targets: Role[] = [];
+  for (const roleName of targetNames) {
+    if (!isRole(roleName)) {
+      throw new Error(`Invalid role in --to: ${roleName}`);
+    }
+    targets.push(roleName);
+  }
+
+  const normalizedType = type.toUpperCase();
+  if (!isMessageType(normalizedType)) {
+    throw new Error(`Invalid message type: ${type}`);
+  }
+
+  for (const role of targets) {
+    runSend(repoRoot, {
+      to: role,
+      type: normalizedType,
+      action,
+      context,
+      replyTo,
+      from,
+    });
+  }
+
+  console.log(`broadcast_sent: ${targets.join(",")}`);
+}
+
 export function runInbox(repoRoot: string, me: string): void {
   if (!isRole(me)) {
     throw new Error(`Invalid role: ${me}`);
@@ -124,7 +185,13 @@ export function runInbox(repoRoot: string, me: string): void {
   }
 }
 
-export function runWatch(repoRoot: string, me: string, intervalSec: number): void {
+export function runWatch(
+  repoRoot: string,
+  me: string,
+  intervalSec: number,
+  typeFilter?: string,
+  contextFilter?: string,
+): void {
   if (!isRole(me)) {
     throw new Error(`Invalid role: ${me}`);
   }
@@ -138,10 +205,16 @@ export function runWatch(repoRoot: string, me: string, intervalSec: number): voi
 
   console.log(`Watching bus inbox for role: ${me} (interval: ${intervalSec}s)`);
   console.log(`bus_dir: ${config.busDir}`);
+  if (typeFilter) {
+    console.log(`filter_type: ${typeFilter.toUpperCase()}`);
+  }
+  if (contextFilter) {
+    console.log(`filter_context: ${contextFilter}`);
+  }
   console.log("Press Ctrl+C to stop.");
 
   while (true) {
-    const current = getPendingMessages(config.busDir, me);
+    const current = getPendingMessages(config.busDir, me, typeFilter, contextFilter);
     const nextSeen = new Set(current.map((msg) => msg.file));
 
     for (const msg of current) {
@@ -154,6 +227,62 @@ export function runWatch(repoRoot: string, me: string, intervalSec: number): voi
     seen = nextSeen;
     sleepMs(intervalMs);
   }
+}
+
+export function runThread(repoRoot: string, context: string): void {
+  if (!context || context === "-") {
+    throw new Error("Missing required option --context for thread view.");
+  }
+
+  const config = loadConfig(repoRoot);
+  const messages = listBusMessages(config.busDir).filter((msg) => msg.context === context);
+
+  if (messages.length === 0) {
+    console.log(`No messages found for context: ${context}`);
+    return;
+  }
+
+  console.log(`Thread: ${context}`);
+  for (const msg of messages) {
+    console.log(
+      `- ${msg.file} | ${msg.status} | ${msg.from} -> ${msg.to} | ${msg.type} | ${msg.action} | reply:${msg.replyTo || "-"}`,
+    );
+  }
+}
+
+function resolveDoneMessage(
+  repoRoot: string,
+  me: string,
+  order: "latest" | "oldest",
+  typeFilter?: string,
+  contextFilter?: string,
+): string {
+  if (!isRole(me)) {
+    throw new Error(`Invalid role: ${me}`);
+  }
+
+  const config = loadConfig(repoRoot);
+  const pending = getPendingMessages(config.busDir, me, typeFilter, contextFilter);
+  if (pending.length === 0) {
+    throw new Error(`No pending messages for ${me}.`);
+  }
+
+  const selected = order === "latest" ? pending[pending.length - 1] : pending[0];
+  return selected.file;
+}
+
+export function runDoneByOrder(
+  repoRoot: string,
+  me: string,
+  order: "latest" | "oldest",
+  summary: string,
+  artifacts: string,
+  from: string,
+  typeFilter?: string,
+  contextFilter?: string,
+): void {
+  const msg = resolveDoneMessage(repoRoot, me, order, typeFilter, contextFilter);
+  runDone(repoRoot, msg, summary, artifacts, from);
 }
 
 export function runDone(repoRoot: string, msg: string, summary: string, artifacts: string, from: string): void {

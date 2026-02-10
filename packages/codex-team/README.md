@@ -15,8 +15,14 @@ Run:
 node dist/cli.js --help
 ```
 
-Watch inbox:
+Main commands:
 
 ```bash
-node dist/cli.js watch --me reviewer --interval 3
+node dist/cli.js init
+node dist/cli.js up --layout quad --with-builder-b
+node dist/cli.js send --to reviewer --type REVIEW --action "please review" --context "issue:demo"
+node dist/cli.js broadcast --to builder-a,builder-b --type TASK --action "same task competition" --context "issue:demo"
+node dist/cli.js watch --me reviewer --interval 2 --context "issue:demo"
+node dist/cli.js thread --context "issue:demo"
+node dist/cli.js done --latest --me reviewer --summary "done" --artifacts "decision.md"
 ```

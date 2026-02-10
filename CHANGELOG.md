@@ -1,5 +1,13 @@
 ﻿# Changelog
 
+## 0.2.0 - 2026-02-10
+
+- Added `broadcast` command for multi-role fan-out dispatch.
+- Added `thread --context` to view message timeline by context/thread id.
+- Added `done --latest/--oldest --me <role>` to remove manual message filename selection.
+- Extended message types with `PROPOSE` and `COMPARE` for structured A/B competition.
+- Enhanced `watch` with optional `--type` and `--context` filters.
+
 ## 0.1.0 - 2026-02-10
 
 - Added cross-platform `codex-team` TypeScript CLI under `packages/codex-team`.

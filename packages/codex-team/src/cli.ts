@@ -2,7 +2,7 @@
 import os from "node:os";
 import { runInit } from "./core/init.js";
 import { runUp } from "./core/up.js";
-import { runSend, runInbox, runDone, runWatch } from "./core/bus.js";
+import { runSend, runInbox, runDone, runWatch, runBroadcast, runThread, runDoneByOrder } from "./core/bus.js";
 import { findRepoRoot } from "./utils/paths.js";
 
 interface ParsedArgs {
@@ -41,7 +41,7 @@ function requireStringFlag(parsed: ParsedArgs, key: string): string {
 }
 
 function printHelp(): void {
-  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  watch --me <role> [--interval <seconds>]\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n`);
+  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  broadcast --to <role1,role2,...> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  watch --me <role> [--interval <seconds>] [--type <TYPE>] [--context <id>]\n  thread --context <id>\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n  done --latest|--oldest --me <role> --summary <text> [--type <TYPE>] [--context <id>] [--artifacts <text>] [--from <name>]\n`);
 }
 
 function normalizeLayout(value: string | boolean | undefined): "quad" {
@@ -62,6 +62,11 @@ function detectFrom(parsed: ParsedArgs): string {
   return os.userInfo().username;
 }
 
+function getOptionalStringFlag(parsed: ParsedArgs, key: string): string | undefined {
+  const value = parsed.flags[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
 function main(): void {
   const argv = process.argv.slice(2);
   if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
@@ -75,7 +80,7 @@ function main(): void {
 
   switch (command) {
     case "init": {
-      const ctxDir = typeof parsed.flags["ctx-dir"] === "string" ? (parsed.flags["ctx-dir"] as string) : undefined;
+      const ctxDir = getOptionalStringFlag(parsed, "ctx-dir");
       runInit({ repoRoot, ctxDir });
       break;
     }
@@ -89,10 +94,20 @@ function main(): void {
       const to = requireStringFlag(parsed, "to") as any;
       const type = requireStringFlag(parsed, "type").toUpperCase() as any;
       const action = requireStringFlag(parsed, "action");
-      const context = typeof parsed.flags.context === "string" ? (parsed.flags.context as string) : "-";
-      const replyTo = typeof parsed.flags["reply-to"] === "string" ? (parsed.flags["reply-to"] as string) : "-";
+      const context = getOptionalStringFlag(parsed, "context") ?? "-";
+      const replyTo = getOptionalStringFlag(parsed, "reply-to") ?? "-";
       const from = detectFrom(parsed);
       runSend(repoRoot, { to, type, action, context, replyTo, from });
+      break;
+    }
+    case "broadcast": {
+      const toCsv = requireStringFlag(parsed, "to");
+      const type = requireStringFlag(parsed, "type").toUpperCase();
+      const action = requireStringFlag(parsed, "action");
+      const context = getOptionalStringFlag(parsed, "context") ?? "-";
+      const replyTo = getOptionalStringFlag(parsed, "reply-to") ?? "-";
+      const from = detectFrom(parsed);
+      runBroadcast(repoRoot, toCsv, type, action, context, replyTo, from);
       break;
     }
     case "inbox": {
@@ -107,15 +122,41 @@ function main(): void {
       if (!Number.isFinite(interval) || interval < 1) {
         throw new Error("Invalid --interval, use an integer >= 1.");
       }
-      runWatch(repoRoot, me, interval);
+      const typeFilter = getOptionalStringFlag(parsed, "type")?.toUpperCase();
+      const contextFilter = getOptionalStringFlag(parsed, "context");
+      runWatch(repoRoot, me, interval, typeFilter, contextFilter);
+      break;
+    }
+    case "thread": {
+      const context = requireStringFlag(parsed, "context");
+      runThread(repoRoot, context);
       break;
     }
     case "done": {
-      const msg = requireStringFlag(parsed, "msg");
       const summary = requireStringFlag(parsed, "summary");
-      const artifacts = typeof parsed.flags.artifacts === "string" ? (parsed.flags.artifacts as string) : "-";
+      const artifacts = getOptionalStringFlag(parsed, "artifacts") ?? "-";
       const from = detectFrom(parsed);
-      runDone(repoRoot, msg, summary, artifacts, from);
+
+      const directMsg = getOptionalStringFlag(parsed, "msg");
+      if (directMsg) {
+        runDone(repoRoot, directMsg, summary, artifacts, from);
+        break;
+      }
+
+      const latest = Boolean(parsed.flags.latest);
+      const oldest = Boolean(parsed.flags.oldest);
+      if (latest && oldest) {
+        throw new Error("Use only one of --latest or --oldest.");
+      }
+      if (!latest && !oldest) {
+        throw new Error("Missing required option --msg, or use --latest/--oldest with --me.");
+      }
+
+      const me = requireStringFlag(parsed, "me");
+      const typeFilter = getOptionalStringFlag(parsed, "type")?.toUpperCase();
+      const contextFilter = getOptionalStringFlag(parsed, "context");
+      const order = latest ? "latest" : "oldest";
+      runDoneByOrder(repoRoot, me, order, summary, artifacts, from, typeFilter, contextFilter);
       break;
     }
     default:
