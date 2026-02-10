@@ -2,7 +2,7 @@
 import os from "node:os";
 import { runInit } from "./core/init.js";
 import { runUp } from "./core/up.js";
-import { runSend, runInbox, runDone } from "./core/bus.js";
+import { runSend, runInbox, runDone, runWatch } from "./core/bus.js";
 import { findRepoRoot } from "./utils/paths.js";
 
 interface ParsedArgs {
@@ -41,7 +41,7 @@ function requireStringFlag(parsed: ParsedArgs, key: string): string {
 }
 
 function printHelp(): void {
-  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n`);
+  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  watch --me <role> [--interval <seconds>]\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n`);
 }
 
 function normalizeLayout(value: string | boolean | undefined): "quad" {
@@ -98,6 +98,16 @@ function main(): void {
     case "inbox": {
       const me = requireStringFlag(parsed, "me");
       runInbox(repoRoot, me);
+      break;
+    }
+    case "watch": {
+      const me = requireStringFlag(parsed, "me");
+      const intervalRaw = parsed.flags.interval;
+      const interval = typeof intervalRaw === "string" ? Number(intervalRaw) : 5;
+      if (!Number.isFinite(interval) || interval < 1) {
+        throw new Error("Invalid --interval, use an integer >= 1.");
+      }
+      runWatch(repoRoot, me, interval);
       break;
     }
     case "done": {

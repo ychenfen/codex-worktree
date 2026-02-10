@@ -24,6 +24,7 @@
   - macOS: 使用 iTerm2 AppleScript 四格启动 `codex`
 
 - `codex-team send/inbox/done`
+- `codex-team send/inbox/watch/done`
   - 基于 `ctx_dir/bus` 的文件总线互相调用与通知
   - 固定消息格式：
     - `From:`
@@ -79,7 +80,13 @@ node packages/codex-team/dist/cli.js send --to reviewer --type REVIEW --action "
 node packages/codex-team/dist/cli.js inbox --me reviewer
 ```
 
-### 5) done
+### 5) watch（实时监听新消息）
+
+```powershell
+node packages/codex-team/dist/cli.js watch --me reviewer --interval 3
+```
+
+### 6) done
 
 ```powershell
 node packages/codex-team/dist/cli.js done --msg 20260210-1400_to_reviewer_REVIEW.md --summary "已完成审查，见 decision.md" --artifacts "decision.md"

@@ -5,6 +5,14 @@ import { Role, MessageType, SendOptions, MESSAGE_TYPES, ROLES } from "../types.j
 import { listMarkdownFiles, readTextFile, writeTextFile } from "../utils/fs.js";
 import { messageTimestamp, isoTimestamp } from "../utils/time.js";
 
+interface PendingMessage {
+  file: string;
+  type: string;
+  action: string;
+}
+
+const SLEEP_ARRAY = new Int32Array(new SharedArrayBuffer(4));
+
 function isRole(value: string): value is Role {
   return (ROLES as readonly string[]).includes(value);
 }
@@ -39,6 +47,32 @@ function uniqueMessagePath(busDir: string, baseName: string): string {
   }
 
   throw new Error("Unable to allocate unique bus message filename.");
+}
+
+function getPendingMessages(busDir: string, me: Role): PendingMessage[] {
+  const files = listMarkdownFiles(busDir);
+
+  const matched = files
+    .filter((file) => !file.toLowerCase().includes("_done"))
+    .filter((file) => {
+      const content = readTextFile(path.join(busDir, file));
+      const to = parseHeader(content, "To");
+      const status = parseHeader(content, "Status").toUpperCase();
+      return to === me && status !== "DONE";
+    });
+
+  return matched.map((file) => {
+    const content = readTextFile(path.join(busDir, file));
+    return {
+      file,
+      type: parseHeader(content, "Type") || "N/A",
+      action: parseHeader(content, "Action") || "",
+    };
+  });
+}
+
+function sleepMs(ms: number): void {
+  Atomics.wait(SLEEP_ARRAY, 0, 0, ms);
 }
 
 export function runSend(repoRoot: string, options: SendOptions): void {
@@ -77,16 +111,7 @@ export function runInbox(repoRoot: string, me: string): void {
   }
 
   const config = loadConfig(repoRoot);
-  const files = listMarkdownFiles(config.busDir);
-
-  const matched = files
-    .filter((file) => !file.toLowerCase().includes("_done"))
-    .filter((file) => {
-      const content = readTextFile(path.join(config.busDir, file));
-      const to = parseHeader(content, "To");
-      const status = parseHeader(content, "Status").toUpperCase();
-      return to === me && status !== "DONE";
-    });
+  const matched = getPendingMessages(config.busDir, me);
 
   if (matched.length === 0) {
     console.log(`No pending messages for ${me}.`);
@@ -94,11 +119,40 @@ export function runInbox(repoRoot: string, me: string): void {
   }
 
   console.log(`Pending messages for ${me}:`);
-  for (const file of matched) {
-    const content = readTextFile(path.join(config.busDir, file));
-    const msgType = parseHeader(content, "Type") || "N/A";
-    const action = parseHeader(content, "Action") || "";
-    console.log(`- ${file} | ${msgType} | ${action}`);
+  for (const item of matched) {
+    console.log(`- ${item.file} | ${item.type} | ${item.action}`);
+  }
+}
+
+export function runWatch(repoRoot: string, me: string, intervalSec: number): void {
+  if (!isRole(me)) {
+    throw new Error(`Invalid role: ${me}`);
+  }
+  if (!Number.isFinite(intervalSec) || intervalSec < 1) {
+    throw new Error("Invalid --interval, use an integer >= 1.");
+  }
+
+  const config = loadConfig(repoRoot);
+  const intervalMs = Math.floor(intervalSec * 1000);
+  let seen = new Set<string>();
+
+  console.log(`Watching bus inbox for role: ${me} (interval: ${intervalSec}s)`);
+  console.log(`bus_dir: ${config.busDir}`);
+  console.log("Press Ctrl+C to stop.");
+
+  while (true) {
+    const current = getPendingMessages(config.busDir, me);
+    const nextSeen = new Set(current.map((msg) => msg.file));
+
+    for (const msg of current) {
+      if (!seen.has(msg.file)) {
+        const ts = new Date().toISOString();
+        console.log(`[${ts}] NEW ${msg.file} | ${msg.type} | ${msg.action}`);
+      }
+    }
+
+    seen = nextSeen;
+    sleepMs(intervalMs);
   }
 }
 

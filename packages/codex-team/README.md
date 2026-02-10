@@ -14,3 +14,9 @@ Run:
 ```bash
 node dist/cli.js --help
 ```
+
+Watch inbox:
+
+```bash
+node dist/cli.js watch --me reviewer --interval 3
+```
