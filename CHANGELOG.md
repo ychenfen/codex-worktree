@@ -1,11 +1,19 @@
 ﻿# Changelog
 
+## 0.3.1 - 2026-02-10
+
+- Normalized multi-line `--action`/header values into single-line bus headers to avoid thread truncation.
+- Added `--dangerously-bypass-approvals-and-sandbox` passthrough for `auto` and `orchestrate`.
+- `auto` now explicitly requests `workspace-write` sandbox when not in dangerous bypass mode.
+- Updated docs with no-touch orchestration and PowerShell input caveats.
+
 ## 0.3.0 - 2026-02-10
 
 - Added `orchestrate` command to start/stop background auto workers by context.
 - Added `orchestrate --stop` to terminate all worker processes and persist stop state.
 - Updated `up` internals with `launchTerminal` option so orchestration can prepare worktrees without opening panes.
 - Updated docs with orchestrated startup flow for non-manual role execution.
+
 ## 0.2.0 - 2026-02-10
 
 - Added `broadcast` command for multi-role fan-out dispatch.
@@ -23,4 +31,3 @@
 - Added Windows Terminal and macOS iTerm2 adapters.
 - Kept existing `scripts/*.ps1` as legacy prototype (no new features).
 - Added examples and publishing guidance.
-

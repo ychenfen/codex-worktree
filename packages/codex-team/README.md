@@ -27,6 +27,7 @@ node dist/cli.js thread --context "issue:demo"
 node dist/cli.js done --latest --me reviewer --summary "done" --artifacts "decision.md"
 node dist/cli.js auto --me builder-a --interval 3 --context "issue:demo"
 node dist/cli.js orchestrate --context "issue:demo" --with-builder-b --interval 3
+node dist/cli.js orchestrate --context "issue:demo" --with-builder-b --interval 3 --dangerously-bypass-approvals-and-sandbox
 node dist/cli.js orchestrate --stop --context "issue:demo"
 ```
 

@@ -99,6 +99,12 @@ node .\packages\codex-team\dist\cli.js auto --me builder-a --interval 3 --contex
 node .\packages\codex-team\dist\cli.js orchestrate --context "issue:login-retry" --with-builder-b --interval 3
 ```
 
+若你希望绝对无人值守（可能有安全风险）：
+
+```powershell
+node .\packages\codex-team\dist\cli.js orchestrate --context "issue:login-retry" --with-builder-b --interval 3 --dangerously-bypass-approvals-and-sandbox
+```
+
 停止编排：
 
 ```powershell
@@ -121,6 +127,11 @@ node .\packages\codex-team\dist\cli.js orchestrate --stop --context "issue:login
 - A/B 互发 `REVIEW/COMPARE/PROPOSE`，必须带同一 `context`
 - Reviewer 在同一 `context` 下输出对比结论
 - Lead 以 `decision.md` 收敛，Tester 以 `verify.md` 验证
+
+## PowerShell 输入注意
+
+- 尽量一行输入完整命令，避免 `--action` 被续行截断。
+- 即便出现换行，`send/broadcast` 也会自动压成单行写入 bus 头字段。
 
 ## Publishing
 

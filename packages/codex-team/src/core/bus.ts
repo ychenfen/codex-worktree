@@ -38,6 +38,7 @@ export interface AutoOptions {
   contextFilter?: string;
   model?: string;
   fullAuto: boolean;
+  dangerousBypass: boolean;
 }
 
 const SLEEP_ARRAY = new Int32Array(new SharedArrayBuffer(4));
@@ -49,6 +50,13 @@ function isRole(value: string): value is Role {
 
 function isMessageType(value: string): value is MessageType {
   return (MESSAGE_TYPES as readonly string[]).includes(value);
+}
+
+function normalizeHeaderValue(value: string): string {
+  return value
+    .replace(/\r?\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function parseHeader(content: string, key: string): string {
@@ -235,9 +243,9 @@ function buildAutoPrompt(rolePromptPath: string, ctxDir: string, message: BusMes
     `Action: ${message.action}`,
     `Reply-to: ${message.replyTo || "-"}`,
     "",
-    "Do the requested work. If code changes are needed, apply them in the current worktree.",
+    "Do the requested work. If code changes are needed, apply them in the current worktree and write outputs.",
     `If needed, update shared files under ${ctxDir} (task.md/decision.md/verify.md/journal.md).`,
-    "If sandbox permissions are read-only or edits are blocked, do not fail. Return summary with artifacts='-'.",
+    "Only if write access is actually blocked, fallback to summary-only with artifacts='-'.",
     "Do NOT call codex-team done yourself. The worker will mark done automatically.",
     "",
     "Return ONLY JSON with this shape:",
@@ -306,11 +314,17 @@ function processOneAutoMessage(
     outputPath,
   ];
 
+  if (options.dangerousBypass) {
+    args.push("--dangerously-bypass-approvals-and-sandbox");
+  } else {
+    args.push("--sandbox", "workspace-write");
+    if (options.fullAuto) {
+      args.push("--full-auto");
+    }
+  }
+
   if (options.model) {
     args.push("--model", options.model);
-  }
-  if (options.fullAuto) {
-    args.push("--full-auto");
   }
   args.push("-");
 
@@ -350,13 +364,21 @@ export function runSend(repoRoot: string, options: SendOptions): void {
   const fileName = `${ts}_to_${options.to}_${options.type}.md`;
   const targetPath = uniqueMessagePath(config.busDir, fileName);
 
+  const normalizedFrom = normalizeHeaderValue(options.from) || "unknown";
+  const normalizedContext = normalizeHeaderValue(options.context) || "-";
+  const normalizedAction = normalizeHeaderValue(options.action);
+  const normalizedReplyTo = normalizeHeaderValue(options.replyTo) || "-";
+  if (!normalizedAction) {
+    throw new Error("Action cannot be empty.");
+  }
+
   const body = [
-    `From: ${options.from}`,
+    `From: ${normalizedFrom}`,
     `To: ${options.to}`,
     `Type: ${options.type}`,
-    `Context: ${options.context}`,
-    `Action: ${options.action}`,
-    `Reply-to: ${options.replyTo}`,
+    `Context: ${normalizedContext}`,
+    `Action: ${normalizedAction}`,
+    `Reply-to: ${normalizedReplyTo}`,
     `Created-at: ${isoTimestamp()}`,
     "Status: NEW",
     "",
@@ -639,6 +661,7 @@ export function runAuto(repoRoot: string, options: AutoOptions): void {
     console.log(`filter_context: ${options.contextFilter}`);
   }
   console.log(`full_auto: ${options.fullAuto ? "true" : "false"}`);
+  console.log(`dangerous_bypass: ${options.dangerousBypass ? "true" : "false"}`);
   console.log("Press Ctrl+C to stop.");
 
   while (true) {

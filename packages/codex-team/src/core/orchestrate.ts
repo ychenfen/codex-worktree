@@ -15,6 +15,7 @@ interface OrchestrateStartOptions {
   model?: string;
   fullAuto: boolean;
   includeLead: boolean;
+  dangerousBypass: boolean;
 }
 
 interface WorkerRecord {
@@ -74,6 +75,7 @@ function buildAutoArgs(
   intervalSec: number,
   model: string | undefined,
   fullAuto: boolean,
+  dangerousBypass: boolean,
 ): string[] {
   const args = [distCliPath, "auto", "--me", role, "--interval", String(intervalSec), "--context", context];
   if (model) {
@@ -81,6 +83,9 @@ function buildAutoArgs(
   }
   if (!fullAuto) {
     args.push("--no-full-auto");
+  }
+  if (dangerousBypass) {
+    args.push("--dangerously-bypass-approvals-and-sandbox");
   }
   return args;
 }
@@ -155,6 +160,7 @@ export function runOrchestrateStart(repoRoot: string, options: OrchestrateStartO
       options.intervalSec,
       options.model,
       options.fullAuto,
+      options.dangerousBypass,
     );
 
     const child = spawn(process.execPath, args, {

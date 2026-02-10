@@ -47,7 +47,7 @@ function getOptionalStringFlag(parsed: ParsedArgs, key: string): string | undefi
 }
 
 function printHelp(): void {
-  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  broadcast --to <role1,role2,...> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  watch --me <role> [--interval <seconds>] [--type <TYPE>] [--context <id>]\n  thread --context <id>\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n  done --latest|--oldest --me <role> --summary <text> [--type <TYPE>] [--context <id>] [--artifacts <text>] [--from <name>]\n  auto --me <role> [--interval <seconds>] [--once] [--type <TYPE>] [--context <id>] [--model <name>] [--no-full-auto]\n  orchestrate --context <id> [--with-builder-b] [--interval <seconds>] [--model <name>] [--no-full-auto] [--lead]\n  orchestrate --stop --context <id>\n`);
+  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  broadcast --to <role1,role2,...> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  watch --me <role> [--interval <seconds>] [--type <TYPE>] [--context <id>]\n  thread --context <id>\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n  done --latest|--oldest --me <role> --summary <text> [--type <TYPE>] [--context <id>] [--artifacts <text>] [--from <name>]\n  auto --me <role> [--interval <seconds>] [--once] [--type <TYPE>] [--context <id>] [--model <name>] [--no-full-auto] [--dangerously-bypass-approvals-and-sandbox]\n  orchestrate --context <id> [--with-builder-b] [--interval <seconds>] [--model <name>] [--no-full-auto] [--lead] [--dangerously-bypass-approvals-and-sandbox]\n  orchestrate --stop --context <id>\n`);
 }
 
 function normalizeLayout(value: string | boolean | undefined): "quad" {
@@ -173,6 +173,7 @@ function main(): void {
       const contextFilter = getOptionalStringFlag(parsed, "context");
       const model = getOptionalStringFlag(parsed, "model");
       const noFullAuto = Boolean(parsed.flags["no-full-auto"]);
+      const dangerousBypass = Boolean(parsed.flags["dangerously-bypass-approvals-and-sandbox"]);
 
       runAuto(repoRoot, {
         me,
@@ -182,6 +183,7 @@ function main(): void {
         contextFilter,
         model,
         fullAuto: !noFullAuto,
+        dangerousBypass,
       });
       break;
     }
@@ -203,6 +205,7 @@ function main(): void {
       const model = getOptionalStringFlag(parsed, "model");
       const noFullAuto = Boolean(parsed.flags["no-full-auto"]);
       const lead = Boolean(parsed.flags.lead);
+      const dangerousBypass = Boolean(parsed.flags["dangerously-bypass-approvals-and-sandbox"]);
 
       runOrchestrateStart(repoRoot, {
         context,
@@ -211,6 +214,7 @@ function main(): void {
         model,
         fullAuto: !noFullAuto,
         includeLead: lead,
+        dangerousBypass,
       });
       break;
     }
