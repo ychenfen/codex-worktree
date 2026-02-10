@@ -1,0 +1,15 @@
+﻿# Runtime sessions are local working state
+sessions/*
+!sessions/.gitkeep
+
+# Session runtime artifacts
+sessions/*/artifacts/*
+
+# Local editor caches
+.vscode/
+.idea/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
