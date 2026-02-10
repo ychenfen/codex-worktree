@@ -17,6 +17,7 @@
 - `codex-team watch`
 - `codex-team thread`
 - `codex-team done`（支持 `--msg` 或 `--latest/--oldest --me`）
+- `codex-team auto`（自动消费 bus 消息并调用 `codex exec` 处理）
 
 消息类型：`TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE`
 
@@ -85,13 +86,20 @@ node .\packages\codex-team\dist\cli.js done --msg 20260210-1529_to_reviewer_REVI
 node .\packages\codex-team\dist\cli.js done --latest --me reviewer --summary "审查完成" --artifacts "decision.md" --from reviewer
 ```
 
+9. 自动执行（非人工轮询）：
+
+```powershell
+node .\packages\codex-team\dist\cli.js auto --me builder-a --interval 3 --context "issue:login-retry"
+```
+
 ## 四窗口到底有什么用
 
-四窗口的价值不是“自动执行对方会话”，而是：
+四窗口 + auto 的价值：
 
 - 每个角色独立上下文，不互相污染
 - 通过 `bus/` 文件总线进行可追溯协作
 - `watch` 提供实时新消息通知
+- `auto` 可直接自动消费消息，执行后自动 `done`
 - `thread --context` 让竞争交流可回放、可裁决
 
 ## 推荐竞争协议（A/B）

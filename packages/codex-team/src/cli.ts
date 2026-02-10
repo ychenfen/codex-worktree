@@ -2,7 +2,7 @@
 import os from "node:os";
 import { runInit } from "./core/init.js";
 import { runUp } from "./core/up.js";
-import { runSend, runInbox, runDone, runWatch, runBroadcast, runThread, runDoneByOrder } from "./core/bus.js";
+import { runSend, runInbox, runDone, runWatch, runBroadcast, runThread, runDoneByOrder, runAuto } from "./core/bus.js";
 import { findRepoRoot } from "./utils/paths.js";
 
 interface ParsedArgs {
@@ -40,8 +40,13 @@ function requireStringFlag(parsed: ParsedArgs, key: string): string {
   return value;
 }
 
+function getOptionalStringFlag(parsed: ParsedArgs, key: string): string | undefined {
+  const value = parsed.flags[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
 function printHelp(): void {
-  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  broadcast --to <role1,role2,...> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  watch --me <role> [--interval <seconds>] [--type <TYPE>] [--context <id>]\n  thread --context <id>\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n  done --latest|--oldest --me <role> --summary <text> [--type <TYPE>] [--context <id>] [--artifacts <text>] [--from <name>]\n`);
+  console.log(`codex-team <command> [options]\n\nCommands:\n  init [--ctx-dir <path>]\n  up [--layout quad] [--with-builder-b]\n  send --to <role> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  broadcast --to <role1,role2,...> --type <TASK|REVIEW|VERIFY|BLOCKER|FYI|PROPOSE|COMPARE> --action <text> [--context <text>] [--reply-to <filename>] [--from <name>]\n  inbox --me <role>\n  watch --me <role> [--interval <seconds>] [--type <TYPE>] [--context <id>]\n  thread --context <id>\n  done --msg <filename> --summary <text> [--artifacts <text>] [--from <name>]\n  done --latest|--oldest --me <role> --summary <text> [--type <TYPE>] [--context <id>] [--artifacts <text>] [--from <name>]\n  auto --me <role> [--interval <seconds>] [--once] [--type <TYPE>] [--context <id>] [--model <name>] [--no-full-auto]\n`);
 }
 
 function normalizeLayout(value: string | boolean | undefined): "quad" {
@@ -60,11 +65,6 @@ function detectFrom(parsed: ParsedArgs): string {
     return from.trim();
   }
   return os.userInfo().username;
-}
-
-function getOptionalStringFlag(parsed: ParsedArgs, key: string): string | undefined {
-  const value = parsed.flags[key];
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function main(): void {
@@ -157,6 +157,31 @@ function main(): void {
       const contextFilter = getOptionalStringFlag(parsed, "context");
       const order = latest ? "latest" : "oldest";
       runDoneByOrder(repoRoot, me, order, summary, artifacts, from, typeFilter, contextFilter);
+      break;
+    }
+    case "auto": {
+      const me = requireStringFlag(parsed, "me");
+      const intervalRaw = parsed.flags.interval;
+      const interval = typeof intervalRaw === "string" ? Number(intervalRaw) : 5;
+      if (!Number.isFinite(interval) || interval < 1) {
+        throw new Error("Invalid --interval, use an integer >= 1.");
+      }
+
+      const once = Boolean(parsed.flags.once);
+      const typeFilter = getOptionalStringFlag(parsed, "type")?.toUpperCase();
+      const contextFilter = getOptionalStringFlag(parsed, "context");
+      const model = getOptionalStringFlag(parsed, "model");
+      const noFullAuto = Boolean(parsed.flags["no-full-auto"]);
+
+      runAuto(repoRoot, {
+        me,
+        intervalSec: interval,
+        once,
+        typeFilter,
+        contextFilter,
+        model,
+        fullAuto: !noFullAuto,
+      });
       break;
     }
     default:

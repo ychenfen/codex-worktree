@@ -7,6 +7,7 @@
 - Added `done --latest/--oldest --me <role>` to remove manual message filename selection.
 - Extended message types with `PROPOSE` and `COMPARE` for structured A/B competition.
 - Enhanced `watch` with optional `--type` and `--context` filters.
+- Added `auto` worker mode to process NEW bus messages via `codex exec` and auto-complete with `done`.
 
 ## 0.1.0 - 2026-02-10
 

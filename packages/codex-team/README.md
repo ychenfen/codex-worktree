@@ -25,4 +25,5 @@ node dist/cli.js broadcast --to builder-a,builder-b --type TASK --action "same t
 node dist/cli.js watch --me reviewer --interval 2 --context "issue:demo"
 node dist/cli.js thread --context "issue:demo"
 node dist/cli.js done --latest --me reviewer --summary "done" --artifacts "decision.md"
+node dist/cli.js auto --me builder-a --interval 3 --context "issue:demo"
 ```

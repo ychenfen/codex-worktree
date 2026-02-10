@@ -20,6 +20,24 @@ export function run(command: string, args: string[], cwd?: string): ShellResult 
   };
 }
 
+export function runWithInput(command: string, args: string[], input: string, cwd?: string): ShellResult {
+  const needsShell = process.platform === "win32" && /\.cmd$/i.test(command);
+  const result = spawnSync(command, args, {
+    cwd,
+    input,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+    shell: needsShell,
+  });
+
+  const spawnError = result.error ? String(result.error.message ?? result.error) : "";
+  return {
+    stdout: result.stdout ?? "",
+    stderr: (result.stderr ?? "") + (spawnError ? `\n${spawnError}` : ""),
+    status: result.status ?? 1,
+  };
+}
+
 export function runChecked(command: string, args: string[], cwd?: string): string {
   const result = run(command, args, cwd);
   if (result.status !== 0) {
