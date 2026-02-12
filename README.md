@@ -166,6 +166,12 @@ Autopilot（mac，无人值守多角色执行）：
 ./scripts/bus-send.sh --session fix-uds-timeout --from lead --to builder-a --intent implement --message "实现 xxx" --accept "pytest -q" --risk medium
 ```
 
+Claude Code 风格的“对话式终端入口”（mac）：
+
+```bash
+./scripts/team.sh demo-team-20260213
+```
+
 ## 对话隔离规则（强约束）
 
 - Builder-A 不读取 Builder-B 的 `inbox/outbox/worklog`，反之亦然。

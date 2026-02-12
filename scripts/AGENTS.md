@@ -15,6 +15,8 @@
 - Autopilot (mac):
   - `./scripts/autopilot.sh start <session-id>`
   - `python3 ./scripts/autopilot.py daemon --session <session-id> --role lead`
+- Team terminal (mac):
+  - `./scripts/team.sh <session-id> --new`
 
 ## Conventions
 - Cross-platform paths only:
