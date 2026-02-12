@@ -18,3 +18,5 @@
    - Evidence / Results
    - Risks + Rollback
 4. 必须把交付写入 `roles/builder-a/outbox.md`，并同步更新 `shared/verify.md`（可执行验收命令）。
+5. 需要澄清时，使用 `shared/chat/messages/*.md` 发送消息（脚本写入，避免并发冲突）。
+6. 需要主动找其它角色协作时，用消息总线发任务/问题（避免歧义与重复执行）：`./scripts/bus-send.sh --session {{SESSION_ID}} --from builder-a --to reviewer --intent question --message "<...>"`。

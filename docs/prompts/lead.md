@@ -15,6 +15,8 @@
 4. 在 `shared/decision.md` 写最终合并建议。
 5. 每次关键动作必须追加 `roles/lead/worklog.md` 与 `shared/journal.md`。
 6. 派工前先按 `docs/team-mode.md` 做任务分类（Work Type / Risk / Evidence），并确保每条任务有 Task ID。
+7. 角色对话使用 `shared/chat/messages/*.md`（脚本写入，避免并发冲突），不要直接多人同时编辑 `shared/chat.md`。
+8. 无人值守模式下优先用消息总线派工：`./scripts/bus-send.sh --session {{SESSION_ID}} --from lead --to <role> --intent implement --message "<...>" --accept "<...>"`。
 
 启动动作：
 - 若 `shared/task.md` 为空，先写任务卡模板并等待用户补充。

@@ -113,7 +113,7 @@ pwsh ./scripts/log-entry.ps1 -SessionName fix-uds-timeout -Role builder-a -Chann
 pwsh ./scripts/check-session.ps1 -SessionName fix-uds-timeout
 ```
 
-角色对话（mac 推荐，写入 shared/chat.md）：
+角色对话（mac 推荐，写入 `shared/chat/messages/*.md`，避免并发冲突）：
 
 ```powershell
 pwsh ./scripts/chat.ps1 -SessionName fix-uds-timeout -Role builder-a -Message "我打算改 scripts/new-session.ps1 的路径拼接，这样 OK 吗？" -Mention reviewer
@@ -123,6 +123,24 @@ pwsh ./scripts/chat.ps1 -SessionName fix-uds-timeout -Role builder-a -Message "�
 
 ```bash
 ./scripts/chat.sh fix-uds-timeout builder-a "我打算改 scripts/new-session.ps1 的路径拼接，这样 OK 吗？" reviewer
+```
+
+渲染对话为可读线程：
+
+```bash
+./scripts/render-chat.sh fix-uds-timeout
+```
+
+Autopilot（mac，无人值守多角色执行）：
+
+```bash
+./scripts/autopilot.sh start fix-uds-timeout
+```
+
+投递一条任务给某角色（消息总线，不冲突、可追踪）：
+
+```bash
+./scripts/bus-send.sh --session fix-uds-timeout --from lead --to builder-a --intent implement --message "实现 xxx" --accept "pytest -q" --risk medium
 ```
 
 ## 对话隔离规则（强约束）

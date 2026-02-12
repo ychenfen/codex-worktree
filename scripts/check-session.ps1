@@ -41,12 +41,52 @@ if (-not (Test-Path $sessionRoot)) {
 $errors = @()
 $warnings = @()
 
-	foreach ($f in @("task.md", "decision.md", "verify.md", "pitfalls.md", "journal.md", "chat.md")) {
-	    $p = Join-Path (Join-Path $sessionRoot "shared") $f
-	    if (-not (Test-Path $p)) {
-	        $errors += "Missing shared file: $p"
-	    }
-	}
+foreach ($f in @("task.md", "decision.md", "verify.md", "pitfalls.md", "journal.md", "chat.md")) {
+    $p = Join-Path (Join-Path $sessionRoot "shared") $f
+    if (-not (Test-Path $p)) {
+        $errors += "Missing shared file: $p"
+    }
+}
+
+$chatMessagesDir = Join-Path (Join-Path (Join-Path $sessionRoot "shared") "chat") "messages"
+if (-not (Test-Path $chatMessagesDir)) {
+    # Backward-compatible repair for sessions created before chat/messages existed.
+    New-Item -ItemType Directory -Path $chatMessagesDir -Force | Out-Null
+    $warnings += "Chat messages directory was missing and has been created: $chatMessagesDir"
+}
+
+$busRoot = Join-Path $sessionRoot "bus"
+if (-not (Test-Path $busRoot)) {
+    New-Item -ItemType Directory -Path $busRoot -Force | Out-Null
+    $warnings += "Bus root was missing and has been created: $busRoot"
+}
+
+foreach ($p in @(
+    (Join-Path $busRoot "inbox"),
+    (Join-Path $busRoot "outbox"),
+    (Join-Path $busRoot "deadletter")
+)) {
+    if (-not (Test-Path $p)) {
+        New-Item -ItemType Directory -Path $p -Force | Out-Null
+        $warnings += "Bus directory was missing and has been created: $p"
+    }
+}
+
+$stateRoot = Join-Path $sessionRoot "state"
+if (-not (Test-Path $stateRoot)) {
+    New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
+    $warnings += "State root was missing and has been created: $stateRoot"
+}
+foreach ($p in @(
+    (Join-Path $stateRoot "processing"),
+    (Join-Path $stateRoot "done"),
+    (Join-Path $stateRoot "archive")
+)) {
+    if (-not (Test-Path $p)) {
+        New-Item -ItemType Directory -Path $p -Force | Out-Null
+        $warnings += "State directory was missing and has been created: $p"
+    }
+}
 
 $rolesDir = Join-Path $sessionRoot "roles"
 if (-not (Test-Path $rolesDir)) {
@@ -63,6 +103,23 @@ if ($roles.Count -eq 0) {
 }
 
 foreach ($role in $roles) {
+    # Ensure per-role bus/state directories exist.
+    $roleInboxDir = Join-Path (Join-Path $busRoot "inbox") $role
+    if (-not (Test-Path $roleInboxDir)) {
+        New-Item -ItemType Directory -Path $roleInboxDir -Force | Out-Null
+        $warnings += "Role bus inbox directory was missing and has been created: $roleInboxDir"
+    }
+    $roleDeadletterDir = Join-Path (Join-Path $busRoot "deadletter") $role
+    if (-not (Test-Path $roleDeadletterDir)) {
+        New-Item -ItemType Directory -Path $roleDeadletterDir -Force | Out-Null
+        $warnings += "Role bus deadletter directory was missing and has been created: $roleDeadletterDir"
+    }
+    $roleArchiveDir = Join-Path (Join-Path $stateRoot "archive") $role
+    if (-not (Test-Path $roleArchiveDir)) {
+        New-Item -ItemType Directory -Path $roleArchiveDir -Force | Out-Null
+        $warnings += "Role archive directory was missing and has been created: $roleArchiveDir"
+    }
+
     foreach ($f in @("inbox.md", "outbox.md", "worklog.md", "prompt.md")) {
         $p = Join-Path (Join-Path (Join-Path $sessionRoot "roles") $role) $f
         if (-not (Test-Path $p)) {

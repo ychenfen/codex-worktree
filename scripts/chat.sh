@@ -45,25 +45,32 @@ if [[ -z "${MAIN:-}" ]]; then
   MAIN="$TOP"
 fi
 
-CHAT="$MAIN/sessions/$SESSION/shared/chat.md"
-if [[ ! -f "$CHAT" ]]; then
-  echo "Chat file not found: $CHAT" >&2
+CHAT_INDEX="$MAIN/sessions/$SESSION/shared/chat.md"
+if [[ ! -f "$CHAT_INDEX" ]]; then
+  echo "Chat file not found: $CHAT_INDEX" >&2
   echo "Did you create the session with new-session.ps1?" >&2
   exit 1
 fi
 
+MSG_DIR="$MAIN/sessions/$SESSION/shared/chat/messages"
+mkdir -p "$MSG_DIR"
+
 TS="$(date '+%Y-%m-%d %H:%M:%S')"
+TS_FILE="$(date '+%Y%m%d-%H%M%S')"
 TO=""
 if [[ -n "$MENTION" ]]; then
   TO=" -> @$MENTION"
 fi
 
-{
-  echo ""
-  echo "### [$TS] $ROLE$TO"
-  echo ""
-  echo "$MESSAGE"
-} >>"$CHAT"
+RAND="$(python3 -c 'import secrets; print(secrets.token_hex(3))' 2>/dev/null || true)"
+if [[ -z "${RAND:-}" ]]; then
+  RAND="$(date +%s%N | tail -c 7)"
+fi
+MSG_FILE="$MSG_DIR/$TS_FILE-$ROLE-$RAND.md"
+cat >"$MSG_FILE" <<EOF
+### [$TS] $ROLE$TO
 
-echo "Appended chat to: $CHAT"
+$MESSAGE
+EOF
 
+echo "Wrote chat message: $MSG_FILE"

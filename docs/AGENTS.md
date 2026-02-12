@@ -7,6 +7,8 @@
   - `docs/templates/`: Markdown templates rendered into `sessions/<id>/...`.
   - `docs/protocol.md`: workflow rules and boundaries.
   - `docs/team-mode.md`: task classification and routing guide.
+  - `docs/bus.md`: message bus protocol (unattended multi-role execution).
+  - `docs/autopilot-mac.md`: how to run the role workers on macOS.
 
 ## Conventions
 - Keep docs **operational**: short rules, explicit file paths, explicit "done" signals.
@@ -27,4 +29,3 @@
 ## Do not
 - Do not document secrets or credentials.
 - Do not add long essays; link to deeper docs only if necessary.
-

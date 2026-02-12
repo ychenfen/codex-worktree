@@ -34,6 +34,10 @@ This repo is a workflow template for **multi-role, worktree-based collaboration*
 - Create session: `pwsh ./scripts/new-session.ps1 -SessionName <session-id> -CreateWorktrees`
 - Dispatch: `pwsh ./scripts/dispatch.ps1 -SessionName <session-id> -Role <role> -Message "<...>" -Acceptance "<...>"`
 
+## Autopilot (mac)
+- Unattended multi-role execution: `docs/autopilot-mac.md`
+- Start daemons: `./scripts/autopilot.sh start <session-id>`
+
 ## Global conventions
 - Preserve the isolation model: roles communicate via Markdown, not "memory".
 - Prefer small, auditable changes to docs/scripts; every workflow change should update templates/prompts accordingly.
@@ -42,4 +46,3 @@ This repo is a workflow template for **multi-role, worktree-based collaboration*
 ## Do not
 - Do not add committed content under `sessions/` or `.tools/`.
 - Do not weaken role boundaries (e.g., allow Builder-A to read Builder-B private logs).
-

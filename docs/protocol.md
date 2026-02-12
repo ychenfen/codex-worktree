@@ -77,7 +77,18 @@ Lead 或 Reviewer 采用以下对比维度收敛：
 ## 7. 角色对话（mac 推荐）
 
 - 角色之间允许通过 `shared/chat.md` 进行快速澄清与问答。
+- 为避免并发写冲突，聊天消息推荐通过脚本写入 `shared/chat/messages/*.md`，再渲染到 `shared/chat.md`：
+  - `./scripts/chat.sh <session> <role> "<message>" [mention]`
+  - `./scripts/render-chat.sh <session>`
 - 任何“最终结论/验收/合并建议”必须沉淀回：
   - `shared/decision.md`（评审结论）
   - `shared/verify.md`（可执行验收）
   - `roles/<role>/outbox.md`（实现交付）
+
+## 8. 无人值守执行（Autopilot + Bus）
+
+- 为保证“消息互通且不冲突”，自动执行推荐使用消息总线（见 `docs/bus.md`）：
+  - 任务/问题：`bus/inbox/<role>/*.md`
+  - 回执：`bus/outbox/*.md`
+  - 失败：`bus/deadletter/<role>/*.md`
+- Autopilot 守护进程会自动消费 `bus/inbox/<role>/`，并调用 `codex exec` 执行。

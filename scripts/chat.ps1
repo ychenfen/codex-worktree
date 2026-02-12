@@ -52,7 +52,13 @@ if (-not (Test-Path $chatPath)) {
     throw "Chat file not found: $chatPath"
 }
 
+$messagesDir = Join-Path (Join-Path (Join-Path $sessionRoot "shared") "chat") "messages"
+if (-not (Test-Path $messagesDir)) {
+    New-Item -ItemType Directory -Path $messagesDir -Force | Out-Null
+}
+
 $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+$tsFile = (Get-Date).ToString("yyyyMMdd-HHmmss")
 $to = ""
 if ($Mention.Trim()) {
     $to = " -> @" + $Mention.Trim()
@@ -65,6 +71,7 @@ $entry = @"
 $Message
 "@
 
-Add-Content -Path $chatPath -Value $entry -Encoding utf8
-Write-Host "Appended chat to: $chatPath" -ForegroundColor Green
-
+$rand = -join ((48..57) + (97..122) | Get-Random -Count 6 | ForEach-Object { [char]$_ })
+$msgFile = Join-Path $messagesDir "$tsFile-$Role-$rand.md"
+Set-Content -Path $msgFile -Value $entry.TrimEnd() -Encoding utf8
+Write-Host "Wrote chat message: $msgFile" -ForegroundColor Green

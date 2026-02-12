@@ -142,6 +142,29 @@ New-Item -ItemType Directory -Path $sessionRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $sessionRoot "shared") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $sessionRoot "roles") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $sessionRoot "artifacts") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path (Join-Path $sessionRoot "shared") "chat") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path (Join-Path (Join-Path $sessionRoot "shared") "chat") "messages") -Force | Out-Null
+
+# Message bus + state (for unattended multi-role execution)
+$busRoot = Join-Path $sessionRoot "bus"
+New-Item -ItemType Directory -Path $busRoot -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $busRoot "outbox") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $busRoot "inbox") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $busRoot "deadletter") -Force | Out-Null
+
+foreach ($r in $roles) {
+    New-Item -ItemType Directory -Path (Join-Path (Join-Path $busRoot "inbox") $r) -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path (Join-Path $busRoot "deadletter") $r) -Force | Out-Null
+}
+
+$stateRoot = Join-Path $sessionRoot "state"
+New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $stateRoot "processing") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $stateRoot "done") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $stateRoot "archive") -Force | Out-Null
+foreach ($r in $roles) {
+    New-Item -ItemType Directory -Path (Join-Path (Join-Path $stateRoot "archive") $r) -Force | Out-Null
+}
 
 $baseVars = @{
     SESSION_ID   = $sessionId

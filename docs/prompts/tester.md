@@ -14,3 +14,5 @@
 3. 失败时给最小复现步骤与日志。
 4. 标注覆盖范围与未覆盖项。
 5. 所有可执行验收命令集中维护在 `shared/verify.md`，确保 Lead 能一眼看到最终验收状态。
+6. 需要澄清时，使用 `shared/chat/messages/*.md` 发送消息（脚本写入，避免并发冲突）。
+7. 验收失败或需要 Builder 补修时，用消息总线派回去：`./scripts/bus-send.sh --session {{SESSION_ID}} --from tester --to builder-a --intent fix --message "<最小复现>" --accept "<验证命令>"`。

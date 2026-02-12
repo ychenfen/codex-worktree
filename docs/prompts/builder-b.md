@@ -17,3 +17,5 @@
    - Evidence / Results
    - Risks + Rollback
 3. 能补测试就补；不能补要写原因，并把验证命令补到 `shared/verify.md`。
+4. 需要澄清时，使用 `shared/chat/messages/*.md` 发送消息（脚本写入，避免并发冲突）。
+5. 需要主动找其它角色协作时，用消息总线发任务/问题：`./scripts/bus-send.sh --session {{SESSION_ID}} --from builder-b --to reviewer --intent question --message "<...>"`。
