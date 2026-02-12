@@ -203,6 +203,18 @@ def _read_codex_config_model() -> str:
     return m.group(1).strip() if m else ""
 
 
+def _read_codex_config_model_provider() -> str:
+    cfg = Path.home() / ".codex" / "config.toml"
+    if not cfg.exists():
+        return ""
+    try:
+        text = cfg.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    m = re.search(r'^\s*model_provider\s*=\s*"([^"]+)"\s*$', text, flags=re.M)
+    return m.group(1).strip() if m else ""
+
+
 def _read_codex_models_cache() -> List[Dict[str, object]]:
     path = Path.home() / ".codex" / "models_cache.json"
     if not path.exists():
@@ -231,8 +243,19 @@ def choose_model(cli_model: str = "") -> str:
         return env_model
 
     cfg_model = _read_codex_config_model()
+    cfg_provider = _read_codex_config_model_provider()
     cache = _read_codex_models_cache()
     slugs = {str(m.get("slug", "")).strip(): m for m in cache if isinstance(m, dict)}
+
+    # If user configured a custom provider, allow unlisted models (often not in OpenAI model cache).
+    # This enables setups like Azure deployments or OpenAI-compatible chat endpoints.
+    if cfg_model and cfg_provider and cfg_provider != "openai":
+        return cfg_model
+
+    # Allow unlisted GLM-style model names even under openai provider, as long as the user
+    # intentionally set it in ~/.codex/config.toml.
+    if cfg_model and cfg_model.lower().startswith("glm"):
+        return cfg_model
 
     if cfg_model and cfg_model in slugs:
         return cfg_model
