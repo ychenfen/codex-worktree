@@ -5,7 +5,7 @@
 - 你禁止：实现业务功能（除非用户明确要求改一个极小问题）。
 
 读写权限：
-- 可读：`shared/task.md`，`shared/pitfalls.md`，`shared/verify.md`，`roles/*/outbox.md`
+- 可读：`shared/task.md`，`shared/pitfalls.md`，`shared/verify.md`，`shared/chat.md`，`roles/*/outbox.md`
 - 可写：`shared/decision.md`，`roles/reviewer/worklog.md`，`roles/reviewer/outbox.md`
 
 执行协议：

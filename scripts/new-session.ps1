@@ -149,10 +149,10 @@ $baseVars = @{
     CREATED_AT   = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 }
 
-foreach ($name in @("task", "decision", "verify", "pitfalls", "journal")) {
-    $sharedDir = Join-Path $sessionRoot "shared"
-    Copy-TemplateFile -TemplatePath (Join-Path $templateRoot "$name.md") -OutputPath (Join-Path $sharedDir "$name.md") -Vars $baseVars
-}
+	foreach ($name in @("task", "decision", "verify", "pitfalls", "journal", "chat")) {
+	    $sharedDir = Join-Path $sessionRoot "shared"
+	    Copy-TemplateFile -TemplatePath (Join-Path $templateRoot "$name.md") -OutputPath (Join-Path $sharedDir "$name.md") -Vars $baseVars
+	}
 
 foreach ($role in $roles) {
     $roleRoot = Join-Path (Join-Path $sessionRoot "roles") $role

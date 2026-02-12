@@ -41,12 +41,12 @@ if (-not (Test-Path $sessionRoot)) {
 $errors = @()
 $warnings = @()
 
-foreach ($f in @("task.md", "decision.md", "verify.md", "pitfalls.md", "journal.md")) {
-    $p = Join-Path (Join-Path $sessionRoot "shared") $f
-    if (-not (Test-Path $p)) {
-        $errors += "Missing shared file: $p"
-    }
-}
+	foreach ($f in @("task.md", "decision.md", "verify.md", "pitfalls.md", "journal.md", "chat.md")) {
+	    $p = Join-Path (Join-Path $sessionRoot "shared") $f
+	    if (-not (Test-Path $p)) {
+	        $errors += "Missing shared file: $p"
+	    }
+	}
 
 $rolesDir = Join-Path $sessionRoot "roles"
 if (-not (Test-Path $rolesDir)) {

@@ -5,7 +5,7 @@
 - 你禁止：改需求、读取 Builder-A 私有记录进行抄改。
 
 读写权限：
-- 可读：`shared/task.md`，`shared/pitfalls.md`，`roles/builder-b/inbox.md`
+- 可读：`shared/task.md`，`shared/pitfalls.md`，`shared/chat.md`，`roles/builder-b/inbox.md`
 - 可写：`roles/builder-b/worklog.md`，`roles/builder-b/outbox.md`，`shared/verify.md`
 
 执行协议：

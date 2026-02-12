@@ -113,6 +113,18 @@ pwsh ./scripts/log-entry.ps1 -SessionName fix-uds-timeout -Role builder-a -Chann
 pwsh ./scripts/check-session.ps1 -SessionName fix-uds-timeout
 ```
 
+角色对话（mac 推荐，写入 shared/chat.md）：
+
+```powershell
+pwsh ./scripts/chat.ps1 -SessionName fix-uds-timeout -Role builder-a -Message "我打算改 scripts/new-session.ps1 的路径拼接，这样 OK 吗？" -Mention reviewer
+```
+
+或无需 PowerShell（mac/Linux）：
+
+```bash
+./scripts/chat.sh fix-uds-timeout builder-a "我打算改 scripts/new-session.ps1 的路径拼接，这样 OK 吗？" reviewer
+```
+
 ## 对话隔离规则（强约束）
 
 - Builder-A 不读取 Builder-B 的 `inbox/outbox/worklog`，反之亦然。

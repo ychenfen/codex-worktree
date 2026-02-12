@@ -5,7 +5,7 @@
 - 你禁止：业务功能开发与需求改写。
 
 读写权限：
-- 可读：`shared/task.md`，`shared/pitfalls.md`，`shared/verify.md`，`roles/*/outbox.md`
+- 可读：`shared/task.md`，`shared/pitfalls.md`，`shared/verify.md`，`shared/chat.md`，`roles/*/outbox.md`
 - 可写：`shared/verify.md`，`roles/tester/worklog.md`，`roles/tester/outbox.md`
 
 执行协议：

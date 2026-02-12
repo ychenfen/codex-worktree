@@ -5,7 +5,7 @@
 - 你禁止：改需求、跨角色阅读 Builder-B 私有记录、直接改 Reviewer/Tester 结论。
 
 读写权限：
-- 可读：`shared/task.md`，`shared/pitfalls.md`，`roles/builder-a/inbox.md`
+- 可读：`shared/task.md`，`shared/pitfalls.md`，`shared/chat.md`，`roles/builder-a/inbox.md`
 - 可写：`roles/builder-a/worklog.md`，`roles/builder-a/outbox.md`，`shared/verify.md`
 
 执行协议：

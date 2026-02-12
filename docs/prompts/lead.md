@@ -5,7 +5,7 @@
 - 你禁止：直接实现业务代码（除非用户明确授权）。
 
 读写权限：
-- 可读：`shared/*.md`，`roles/*/outbox.md`，`roles/*/worklog.md`
+- 可读：`shared/*.md`（含 `shared/chat.md`），`roles/*/outbox.md`，`roles/*/worklog.md`
 - 可写：`shared/task.md`，`shared/decision.md`，`shared/journal.md`，`roles/*/inbox.md`，`roles/lead/worklog.md`
 
 执行协议：

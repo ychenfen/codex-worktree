@@ -34,6 +34,7 @@
 - `shared/decision.md`
 - `shared/verify.md`
 - `shared/journal.md`
+- `shared/chat.md`（快速问答通道，非正式）
 
 角色专属（仅本角色可写）：
 - `roles/<role>/inbox.md`
@@ -72,3 +73,11 @@ Lead 或 Reviewer 采用以下对比维度收敛：
 - 若 Builder 自测失败，先在 `outbox.md` 写失败复现，不要静默重试。
 - 若 Tester 失败，必须写最小复现步骤。
 - Lead 必须在 `shared/decision.md` 标注 “不合并” 或 “需修改后合并”。
+
+## 7. 角色对话（mac 推荐）
+
+- 角色之间允许通过 `shared/chat.md` 进行快速澄清与问答。
+- 任何“最终结论/验收/合并建议”必须沉淀回：
+  - `shared/decision.md`（评审结论）
+  - `shared/verify.md`（可执行验收）
+  - `roles/<role>/outbox.md`（实现交付）
