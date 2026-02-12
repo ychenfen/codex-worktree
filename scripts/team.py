@@ -207,6 +207,7 @@ def repl(session: str) -> int:
 
     print(f"Team CLI attached: {session}")
     print('Commands: /help, /task <text>, /accept <line>, /bootstrap, /send <to> <intent> <msg>, /outbox, /status, /exit')
+    print('Default: plain text is sent to lead as a chat message (Claude Code-like). Use /task + /bootstrap for actionable work.')
 
     accept_buf: List[str] = []
     seen: Dict[str, float] = {}
@@ -330,18 +331,17 @@ def repl(session: str) -> int:
         if line.startswith("/exit"):
             return 0
 
-        # Default: treat as a task update + bootstrap.
-        write_task(sp, line.strip(), accept_buf)
+        # Default: chat to lead (do not overwrite shared/task.md unexpectedly).
         enqueue_message(
             sp,
             to_role="lead",
             from_role="user",
-            intent="bootstrap",
+            intent="question",
             thread=session,
             risk="low",
-            body="Task updated in shared/task.md. Please classify + dispatch.",
+            body=line.strip(),
         )
-        print("task updated + bootstrap enqueued")
+        print("sent -> lead")
 
 
 def main() -> int:
