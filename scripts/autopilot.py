@@ -82,7 +82,7 @@ def parse_role_worktrees(session_md: Path) -> Dict[str, Path]:
     if not session_md.exists():
         return {}
     text = read_text(session_md)
-    m = re.search(r"^## Role worktrees\\s*$", text, flags=re.M)
+    m = re.search(r"^## Role worktrees\s*$", text, flags=re.M)
     if not m:
         return {}
     start = m.end()
@@ -178,7 +178,7 @@ def parse_frontmatter(md: str) -> Tuple[Dict[str, object], str]:
                 fm[current_key] = [val]
             i += 1
             continue
-        m = re.match(r"^([A-Za-z0-9_\\-]+):\\s*(.*)$", line)
+        m = re.match(r"^([A-Za-z0-9_\-]+):\s*(.*)$", line)
         if m:
             k = m.group(1)
             v = m.group(2).strip()
@@ -286,7 +286,19 @@ def codex_exec(role_cwd: Path, prompt: str, out_last: Path) -> int:
     return p.returncode
 
 
-def write_receipt(sp: SessionPaths, mid: str, role: str, status: str, codex_rc: int, last_msg: str) -> None:
+def write_receipt(
+    sp: SessionPaths,
+    mid: str,
+    role: str,
+    status: str,
+    codex_rc: int,
+    last_msg: str,
+    *,
+    thread: str,
+    request_from: str,
+    request_to: str,
+    request_intent: str,
+) -> None:
     out = sp.bus / "outbox" / f"{mid}.{role}.md"
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     text = "\n".join(
@@ -294,6 +306,10 @@ def write_receipt(sp: SessionPaths, mid: str, role: str, status: str, codex_rc: 
             "---",
             f"id: {mid}",
             f"role: {role}",
+            f'thread: "{thread}"',
+            f'request_from: "{request_from}"',
+            f'request_to: "{request_to}"',
+            f'request_intent: "{request_intent}"',
             f"status: {status}",
             f"codex_rc: {codex_rc}",
             f'finished_at: "{ts}"',
@@ -314,6 +330,10 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
     raw = read_text(msg_path)
     front, body = parse_frontmatter(raw)
     mid = message_id(msg_path, front)
+    thread = str(front.get("thread", session)).strip() or session
+    request_from = str(front.get("from", "")).strip()
+    request_to = str(front.get("to", "")).strip()
+    request_intent = str(front.get("intent", "")).strip()
 
     if done_sentinel(sp, mid, role).exists():
         # Already done; archive to keep inbox clean.
@@ -335,7 +355,18 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
     if n >= 3:
         mkdirp(deadletter_path(sp, role, msg_path).parent)
         msg_path.rename(deadletter_path(sp, role, msg_path))
-        write_receipt(sp, mid, role, status="deadletter", codex_rc=99, last_msg="Exceeded max retries.")
+        write_receipt(
+            sp,
+            mid,
+            role,
+            status="deadletter",
+            codex_rc=99,
+            last_msg="Exceeded max retries.",
+            thread=thread,
+            request_from=request_from,
+            request_to=request_to,
+            request_intent=request_intent,
+        )
         try:
             os.rmdir(lock_dir)
         except Exception:
@@ -361,7 +392,18 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
                 last_msg = "(no last message captured)"
             if codex_rc != 0:
                 raise RuntimeError(f"codex rc={codex_rc}")
-        write_receipt(sp, mid, role, status=status, codex_rc=codex_rc, last_msg=last_msg)
+        write_receipt(
+            sp,
+            mid,
+            role,
+            status=status,
+            codex_rc=codex_rc,
+            last_msg=last_msg,
+            thread=thread,
+            request_from=request_from,
+            request_to=request_to,
+            request_intent=request_intent,
+        )
         done_sentinel(sp, mid, role).write_text("ok\n", encoding="utf-8")
         mkdirp((sp.state / "archive" / role))
         msg_path.rename(archive_path(sp, role, msg_path))
@@ -372,7 +414,18 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
         retries["last_error"] = str(e)
         retries["last_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         save_json(retries_path, retries)
-        write_receipt(sp, mid, role, status="retry", codex_rc=codex_rc, last_msg=f"Error: {e}")
+        write_receipt(
+            sp,
+            mid,
+            role,
+            status="retry",
+            codex_rc=codex_rc,
+            last_msg=f"Error: {e}",
+            thread=thread,
+            request_from=request_from,
+            request_to=request_to,
+            request_intent=request_intent,
+        )
         return True
     finally:
         try:
@@ -443,4 +496,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

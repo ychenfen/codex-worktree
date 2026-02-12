@@ -95,6 +95,12 @@ Get-Content ./sessions/feature-login/SESSION.md
 pwsh ./scripts/new-session.ps1 -SessionName fix-uds-timeout -CreateWorktrees -WithBuilderB
 ```
 
+无人值守（可选）：创建时投递一条 lead bootstrap 消息（让 Lead 自动拆解并派工）：
+
+```powershell
+pwsh ./scripts/new-session.ps1 -SessionName fix-uds-timeout -CreateWorktrees -BootstrapBus
+```
+
 Lead 派工：
 
 ```powershell
@@ -136,6 +142,9 @@ Autopilot（mac，无人值守多角色执行）：
 ```bash
 ./scripts/autopilot.sh start fix-uds-timeout
 ```
+
+说明：
+- 会同时启动 `router`，把 `bus/outbox` 回执自动转发为 `bus/inbox` 消息（Lead/Requester 自动收到进展，无需手动查看 outbox）。
 
 投递一条任务给某角色（消息总线，不冲突、可追踪）：
 

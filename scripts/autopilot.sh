@@ -9,8 +9,9 @@ Usage:
   ./scripts/autopilot.sh status <session-id>
 
 Notes:
-  - Starts 1 daemon per role, each running `codex exec` when triggered by inbox/chat updates.
-  - Daemons serialize execution via a global lock under sessions/<id>/artifacts/locks/.
+  - Starts a router daemon plus 1 daemon per role.
+  - Workers run `codex exec` when triggered by bus inbox updates.
+  - Workers serialize execution via a global lock under sessions/<id>/artifacts/locks/.
 EOF
 }
 
@@ -42,10 +43,17 @@ mkdir -p "$PIDS_DIR"
 
 roles() {
   # Derive roles from the session directory.
-  find "$SESSION_ROOT/roles" -maxdepth 1 -type d -print0 2>/dev/null \
-    | xargs -0 -n1 basename \
-    | rg '^(lead|builder-a|builder-b|reviewer|tester)$' -o \
-    | sort -u
+  if [[ ! -d "$SESSION_ROOT/roles" ]]; then
+    return 0
+  fi
+  for d in "$SESSION_ROOT/roles"/*; do
+    [[ -d "$d" ]] || continue
+    b="$(basename "$d")"
+    case "$b" in
+      lead|builder-a|builder-b|reviewer|tester) echo "$b" ;;
+      *) ;;
+    esac
+  done | sort -u
 }
 
 case "$cmd" in
@@ -56,6 +64,13 @@ case "$cmd" in
     fi
 
     : >"$PIDS_FILE"
+
+    # Router: forwards outbox receipts into inbox messages (lead + requester).
+    log="$PIDS_DIR/router.log"
+    nohup python3 "$MAIN/scripts/router.py" daemon --session "$session" --poll "$poll" \
+      >"$log" 2>&1 &
+    echo "router $!" >>"$PIDS_FILE"
+
     while read -r role; do
       log="$PIDS_DIR/$role.log"
       nohup python3 "$MAIN/scripts/autopilot.py" daemon --session "$session" --role "$role" --poll "$poll" \

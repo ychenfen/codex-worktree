@@ -9,6 +9,8 @@ param(
 
     [switch]$CreateWorktrees,
 
+    [switch]$BootstrapBus,
+
     [string]$BaseBranch = "main"
 )
 
@@ -164,6 +166,37 @@ New-Item -ItemType Directory -Path (Join-Path $stateRoot "done") -Force | Out-Nu
 New-Item -ItemType Directory -Path (Join-Path $stateRoot "archive") -Force | Out-Null
 foreach ($r in $roles) {
     New-Item -ItemType Directory -Path (Join-Path (Join-Path $stateRoot "archive") $r) -Force | Out-Null
+}
+
+if ($BootstrapBus) {
+    $ts = (Get-Date).ToString("yyyyMMdd-HHmmss")
+    $bootId = "$ts-bootstrap"
+    $leadInboxDir = Join-Path (Join-Path $busRoot "inbox") "lead"
+    $bootMsgPath = Join-Path $leadInboxDir "$bootId.md"
+    $bootMsg = @"
+---
+id: $bootId
+from: system
+to: lead
+intent: bootstrap
+thread: $sessionId
+risk: low
+acceptance:
+  - "If shared/task.md is empty, ask for missing info (do not guess)."
+  - "If shared/task.md is filled, break down and dispatch to roles via bus-send.sh."
+---
+Bootstrap autopilot for session $sessionId.
+
+Read:
+- shared/task.md
+- docs/team-mode.md
+- docs/bus.md
+
+Then:
+- If task is actionable: dispatch messages to bus/inbox/<role>/ using ./scripts/bus-send.sh.
+- Otherwise: write what is missing and ask for clarification.
+"@
+    Set-Content -Path $bootMsgPath -Value $bootMsg -Encoding utf8
 }
 
 $baseVars = @{

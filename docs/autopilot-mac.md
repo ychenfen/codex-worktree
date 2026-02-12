@@ -11,6 +11,7 @@
 - macOS + git
 - 已登录 Codex CLI（能运行 `codex exec ...`）
 - 会话已创建（推荐带 worktrees）：`pwsh ./scripts/new-session.ps1 -SessionName <id> -CreateWorktrees`
+- 可选：创建会话时投递 lead bootstrap 消息：`pwsh ./scripts/new-session.ps1 -SessionName <id> -CreateWorktrees -BootstrapBus`
 
 ## 文件约定
 - 消息队列：
@@ -31,6 +32,9 @@
 ```bash
 ./scripts/autopilot.sh start <session-id>
 ```
+
+说明：
+- 会同时启动 `router` 守护进程，用于把 `bus/outbox/*.md` 回执转发为 `bus/inbox/*/*.md` 消息（Lead/Requester 自动收到进展）。
 
 查看状态：
 

@@ -17,6 +17,10 @@
 6. 派工前先按 `docs/team-mode.md` 做任务分类（Work Type / Risk / Evidence），并确保每条任务有 Task ID。
 7. 角色对话使用 `shared/chat/messages/*.md`（脚本写入，避免并发冲突），不要直接多人同时编辑 `shared/chat.md`。
 8. 无人值守模式下优先用消息总线派工：`./scripts/bus-send.sh --session {{SESSION_ID}} --from lead --to <role> --intent implement --message "<...>" --accept "<...>"`。
+9. 收到 Router 转发的回执消息（`intent: receipt|alert`）时：
+   - 先读取回执内容（其中包含原任务 `message_id`、worker 角色、状态、回执文件路径）；
+   - 根据 `shared/task.md` 的验收与当前进展，自动派发下一跳（例如发给 reviewer/tester 做 gate，或退回 builder 补证据/修复）；
+   - 重要结论同步到 `shared/decision.md` / `shared/journal.md`。
 
 启动动作：
 - 若 `shared/task.md` 为空，先写任务卡模板并等待用户补充。

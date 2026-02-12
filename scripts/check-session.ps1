@@ -80,7 +80,8 @@ if (-not (Test-Path $stateRoot)) {
 foreach ($p in @(
     (Join-Path $stateRoot "processing"),
     (Join-Path $stateRoot "done"),
-    (Join-Path $stateRoot "archive")
+    (Join-Path $stateRoot "archive"),
+    (Join-Path (Join-Path $stateRoot "router") "processed")
 )) {
     if (-not (Test-Path $p)) {
         New-Item -ItemType Directory -Path $p -Force | Out-Null

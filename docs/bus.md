@@ -53,6 +53,10 @@ worker 处理完成后写回执到 `bus/outbox/<id>.<role>.md`：
 ---
 id: 20260212-235959-acde12
 role: builder-a
+thread: "demo"
+request_from: "lead"
+request_to: "builder-a"
+request_intent: "implement"
 status: done
 codex_rc: 0
 finished_at: "2026-02-12 23:59:59"
@@ -60,10 +64,20 @@ finished_at: "2026-02-12 23:59:59"
 <codex 最后一条消息（或摘要）>
 ```
 
+## Router（回执转发）
+
+为实现“消息互通而不冲突”，建议启用 Router：
+
+- Router 轮询 `bus/outbox/`，把新的/更新后的回执转发成 **新的 bus 消息**：
+  - 发送到 `lead`（默认收敛者）
+  - 同时发送到 `request_from`（如果它是有效角色）
+- 这样 Lead/Requester 不需要手动去读 `outbox/`，也不需要共享文件抢写。
+
+mac 上用 `./scripts/autopilot.sh start <sid>` 会自动启动 router 守护进程。
+
 ## Autopilot
 
 Autopilot 守护进程会轮询 `bus/inbox/<role>/`：
 - 有消息则自动调用 `codex exec` 执行；
 - 失败会重试，超过次数进入 `deadletter/`；
 - 执行默认用全局锁串行化（稳，避免共享文件写冲突）。
-
