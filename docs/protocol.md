@@ -5,6 +5,7 @@
 - 保证多角色并行不互相污染上下文
 - 保证每次交接都有可追溯的 Markdown 证据
 - 保证最终决策可被 Reviewer/Tester 复核
+- 对标 Claude Code 的 team 模式：先分类路由，再实现交付（见 `docs/team-mode.md`）。
 
 ## 2. 会话生命周期
 
@@ -46,6 +47,15 @@
 - 动作摘要
 - 证据（命令、文件、测试结果之一）
 - 下一步
+
+## 4.1 任务分类与路由（推荐）
+
+在派工前先按 `docs/team-mode.md` 做分类：
+- Work Type（实现/重构/修复/调研/文档/验收）
+- Risk（低/中/高）
+- Evidence（至少一个可复现证据）
+
+然后把子任务派发到正确角色，并在 outbox/decision/verify 中形成闭环。
 
 ## 5. 竞争式双 Builder 收敛
 

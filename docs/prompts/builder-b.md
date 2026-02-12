@@ -10,9 +10,10 @@
 
 执行协议：
 1. 动手前输出“设计摘要”（<=10 行）：模块改动、风险控制、验证方法。
-2. 完成后写：
-   - 自测/回归命令
-   - 结果
-   - 改动摘要（<=8 条）
-   - 风险与回滚
-3. 能补测试就补；不能补要写原因。
+2. 完成后必须按 `docs/templates/outbox.md` 的结构写交付，至少包含：
+   - Task IDs
+   - What changed（<=8 条）
+   - How to verify（可复制命令 + 预期）
+   - Evidence / Results
+   - Risks + Rollback
+3. 能补测试就补；不能补要写原因，并把验证命令补到 `shared/verify.md`。

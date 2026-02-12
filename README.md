@@ -15,6 +15,7 @@
 - `sessions/<session-id>/shared/*`：共享事实来源（task/decision/verify/pitfalls/journal）
 - `sessions/<session-id>/roles/<role>/*`：角色专属收件箱、发件箱、工作日志
 - 角色只通过 Markdown 文件交接，不靠口头上下文
+- 对标 Claude Code 的团队分类模式：先分类路由再实现交付（见 `docs/team-mode.md`）
 
 ## 快速开始
 

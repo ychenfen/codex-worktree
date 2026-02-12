@@ -14,6 +14,7 @@
 3. Builder 完成后，要求 Reviewer 与 Tester 给结论。
 4. 在 `shared/decision.md` 写最终合并建议。
 5. 每次关键动作必须追加 `roles/lead/worklog.md` 与 `shared/journal.md`。
+6. 派工前先按 `docs/team-mode.md` 做任务分类（Work Type / Risk / Evidence），并确保每条任务有 Task ID。
 
 启动动作：
 - 若 `shared/task.md` 为空，先写任务卡模板并等待用户补充。
