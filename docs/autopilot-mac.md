@@ -10,8 +10,12 @@
 ## 前置条件
 - macOS + git
 - 已登录 Codex CLI（能运行 `codex exec ...`）
-- 会话已创建（推荐带 worktrees）：`pwsh ./scripts/new-session.ps1 -SessionName <id> -CreateWorktrees`
-- 可选：创建会话时投递 lead bootstrap 消息：`pwsh ./scripts/new-session.ps1 -SessionName <id> -CreateWorktrees -BootstrapBus`
+- 会话已创建（推荐带 worktrees）：
+  - `pwsh ./scripts/new-session.ps1 -SessionName <id> -CreateWorktrees`
+  - 或（无需 PowerShell）：`./scripts/new-session.sh <id> --create-worktrees`
+- 可选：创建会话时投递 lead bootstrap 消息：
+  - `pwsh ./scripts/new-session.ps1 -SessionName <id> -CreateWorktrees -BootstrapBus`
+  - 或（无需 PowerShell）：`./scripts/new-session.sh <id> --create-worktrees --bootstrap-bus`
 
 ## 文件约定
 - 消息队列：

@@ -22,6 +22,7 @@
 前置条件：
 - 安装 Git（用于 `git worktree`）。
 - 安装 PowerShell 7（命令为 `pwsh`，Windows/macOS/Linux 均可）。
+  - mac 上如果不想装 `pwsh`，可用 `./scripts/new-session.sh ...` 创建会话（功能对齐：模板复制 + bus/state + 可选 worktrees + 可选 bootstrap）。
 - 脚本会自动定位到“主 worktree”（`git worktree list` 的第一项），所以你可以在任意角色 worktree 内运行 `scripts/*.ps1`，会话目录仍会落在主 worktree 的 `sessions/` 下。
 
 1. 在仓库根目录创建会话
@@ -30,10 +31,22 @@
 pwsh ./scripts/new-session.ps1 -SessionName feature-login -CreateWorktrees
 ```
 
+mac/Linux（无需 PowerShell）：
+
+```bash
+./scripts/new-session.sh feature-login --create-worktrees
+```
+
 2. 如果要双 Builder 竞争方案
 
 ```powershell
 pwsh ./scripts/new-session.ps1 -SessionName feature-login -CreateWorktrees -WithBuilderB
+```
+
+mac/Linux（无需 PowerShell）：
+
+```bash
+./scripts/new-session.sh feature-login --create-worktrees --with-builder-b
 ```
 
 3. 打开会话指引

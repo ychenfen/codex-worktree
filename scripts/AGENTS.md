@@ -10,6 +10,8 @@
   - `pwsh ./scripts/dispatch.ps1 -SessionName <id> -Role builder-a -Message "<...>"`
   - `pwsh ./scripts/log-entry.ps1 -SessionName <id> -Role lead -Channel worklog -Message "<...>"`
   - `pwsh ./scripts/check-session.ps1 -SessionName <id>`
+- mac/Linux without PowerShell:
+  - `./scripts/new-session.sh <id> --create-worktrees`
 - Autopilot (mac):
   - `./scripts/autopilot.sh start <session-id>`
   - `python3 ./scripts/autopilot.py daemon --session <session-id> --role lead`

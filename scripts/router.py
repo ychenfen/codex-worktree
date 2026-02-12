@@ -225,6 +225,15 @@ def process_receipt(sp: SessionPaths, roles: List[str], receipt_path: Path, dry_
     req_to = str(front.get("request_to", "")).strip()
     req_intent = str(front.get("request_intent", "")).strip()
 
+    # Avoid infinite loops:
+    # - Router forwards receipts by sending bus messages from `from: router`.
+    # - Those forwarded messages will themselves generate receipts when processed by workers.
+    # - The router must NOT forward receipts whose originating sender is `router`.
+    if req_from == "router":
+        mkdirp(st_file.parent)
+        atomic_write(st_file, cur_hash + "\n")
+        return True
+
     intent = receipt_intent(status)
     risk = "medium" if intent == "alert" else "low"
     targets = receipt_targets(roles, front)
@@ -341,4 +350,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
