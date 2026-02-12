@@ -10,6 +10,9 @@
   - `pwsh ./scripts/dispatch.ps1 -SessionName <id> -Role builder-a -Message "<...>"`
   - `pwsh ./scripts/log-entry.ps1 -SessionName <id> -Role lead -Channel worklog -Message "<...>"`
   - `pwsh ./scripts/check-session.ps1 -SessionName <id>`
+- Autopilot (mac):
+  - `./scripts/autopilot.sh start <session-id>`
+  - `python3 ./scripts/autopilot.py daemon --session <session-id> --role lead`
 
 ## Conventions
 - Cross-platform paths only:
@@ -24,4 +27,3 @@
 ## Do not
 - Do not write outside repo root (except git-managed worktrees created by `git worktree`).
 - Do not run privileged operations (`sudo`) from scripts.
-
