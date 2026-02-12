@@ -158,6 +158,7 @@ Autopilot（mac，无人值守多角色执行）：
 
 说明：
 - 会同时启动 `router`，把 `bus/outbox` 回执自动转发为 `bus/inbox` 消息（Lead/Requester 自动收到进展，无需手动查看 outbox）。
+- 如果你配置了自定义默认模型/提供商（例如 GLM），并且遇到默认模型不可用，见 `docs/autopilot-mac.md` 的“自定义默认模型”。
 
 投递一条任务给某角色（消息总线，不冲突、可追踪）：
 

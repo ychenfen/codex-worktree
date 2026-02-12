@@ -17,6 +17,36 @@
   - `pwsh ./scripts/new-session.ps1 -SessionName <id> -CreateWorktrees -BootstrapBus`
   - 或（无需 PowerShell）：`./scripts/new-session.sh <id> --create-worktrees --bootstrap-bus`
 
+## 自定义默认模型（例如 GLM）
+
+你这次遇到的报错 `The model ... does not exist or you do not have access to it.` 本质是 `~/.codex/config.toml` 里默认 `model` 配了不可用的值。
+
+本仓库的 Autopilot 已做了兜底：会自动选一个你当前账号“确实可用”的 Codex 模型；但如果你希望默认走自定义模型（例如 `glm5`），推荐在 `~/.codex/config.toml` 配置 `model_provider` + `model_providers.<id>`。
+
+重要安全提示：
+- 不要把 API key 写进仓库文件或提交到 git。
+- 建议只用环境变量提供鉴权 header（见 `env_http_headers`），并尽快轮换已泄露的 key。
+
+示例（OpenAI-compatible 的 `chat` 接口，供参考；`base_url` 按你自己的网关/厂商接口调整）：
+
+```toml
+model = "glm5"
+model_provider = "glm"
+
+[model_providers.glm]
+name = "GLM"
+wire_api = "chat"
+base_url = "https://YOUR_OPENAI_COMPATIBLE_BASE_URL"
+env_http_headers = { Authorization = "GLM_AUTH" }
+env_key_instructions = "export GLM_AUTH='Bearer <YOUR_KEY>'"
+```
+
+如果只想临时覆盖模型，不改全局 config：
+
+```bash
+./scripts/autopilot.sh start <session-id> 2 --model gpt-5.2-codex
+```
+
 ## 文件约定
 - 消息队列：
   - `sessions/<id>/bus/inbox/<role>/*.md`
