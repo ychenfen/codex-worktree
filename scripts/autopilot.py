@@ -311,6 +311,31 @@ def save_json(path: Path, data: Dict) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
 
 
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # Treat as alive; we can't inspect it but we also shouldn't steal its lock.
+        return True
+    except Exception:
+        return False
+
+
+def _cleanup_lockdir(lock_dir: Path) -> None:
+    try:
+        for p in lock_dir.glob("*"):
+            try:
+                p.unlink()
+            except Exception:
+                pass
+        os.rmdir(lock_dir)
+    except Exception:
+        pass
+
+
 def build_role_prompt(sp: SessionPaths, session: str, role: str, msg_path: Path, msg_body: str) -> str:
     role_prompt_path = sp.roles / role / "prompt.md"
     base = read_text(role_prompt_path).strip() if role_prompt_path.exists() else f"You are {role}."
@@ -421,11 +446,21 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
 
     # Per-message lock: ensure only one instance processes this message.
     lock_dir = processing_lock(sp, mid, role)
+    if lock_dir.exists():
+        # Recover from crashes: steal lock if the pid is gone.
+        pid_file = lock_dir / "pid"
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip()) if pid_file.exists() else 0
+        except Exception:
+            pid = 0
+        if pid > 0 and _pid_alive(pid):
+            return False
+        _cleanup_lockdir(lock_dir)
     try:
         os.mkdir(lock_dir)
-        (Path(lock_dir) / "pid").write_text(str(os.getpid()), encoding="utf-8")
+        (lock_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
     except FileExistsError:
-        return True
+        return False
 
     retries_path = sp.state / "processing" / f"{mid}.{role}.retries.json"
     retries = load_json(retries_path)
@@ -445,10 +480,7 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
             request_to=request_to,
             request_intent=request_intent,
         )
-        try:
-            os.rmdir(lock_dir)
-        except Exception:
-            pass
+        _cleanup_lockdir(lock_dir)
         return True
 
     global_lock = sp.artifacts / "locks" / "autopilot.global.lockdir"
@@ -506,10 +538,7 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
         )
         return True
     finally:
-        try:
-            os.rmdir(lock_dir)
-        except Exception:
-            pass
+        _cleanup_lockdir(lock_dir)
 
 
 def daemon(session: str, role: str, poll_s: float, dry_run: bool, *, model: str) -> int:
