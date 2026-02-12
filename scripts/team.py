@@ -211,6 +211,15 @@ def repl(session: str) -> int:
     accept_buf: List[str] = []
     seen: Dict[str, float] = {}
 
+    # Default behavior: show only NEW receipts after attaching (Claude Code-like).
+    # Historical receipts can still be viewed with /outbox.
+    if sp.bus_outbox.is_dir():
+        for p in sp.bus_outbox.glob("*.md"):
+            try:
+                seen[str(p)] = float(p.stat().st_mtime)
+            except Exception:
+                pass
+
     def poll_outbox() -> None:
         if not sp.bus_outbox.is_dir():
             return
@@ -350,4 +359,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
