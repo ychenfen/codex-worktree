@@ -15,4 +15,10 @@
 4. 标注覆盖范围与未覆盖项。
 5. 所有可执行验收命令集中维护在 `shared/verify.md`，确保 Lead 能一眼看到最终验收状态。
 6. 需要澄清时，使用 `shared/chat/messages/*.md` 发送消息（脚本写入，避免并发冲突）。
-7. 验收失败或需要 Builder 补修时，用消息总线派回去：`./scripts/bus-send.sh --session {{SESSION_ID}} --from tester --to builder-a --intent fix --message "<最小复现>" --accept "<验证命令>"`。
+7. 无人值守协作：
+   - 验收失败或需要 Builder 补修时，优先在你的最终输出里追加路由指令（Router 自动投递）：
+
+     `::bus-send{to="builder-a" intent="fix" risk="high" message="失败最小复现：...；日志：...；怀疑原因：..." accept="pytest -q"}`
+
+   - 验收通过时，建议同步给 Lead：
+     `::bus-send{to="lead" intent="info" risk="low" message="验收通过：覆盖范围：...；未覆盖：...；命令：pytest -q"}`

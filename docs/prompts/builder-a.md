@@ -19,4 +19,15 @@
    - Risks + Rollback
 4. 必须把交付写入 `roles/builder-a/outbox.md`，并同步更新 `shared/verify.md`（可执行验收命令）。
 5. 需要澄清时，使用 `shared/chat/messages/*.md` 发送消息（脚本写入，避免并发冲突）。
-6. 需要主动找其它角色协作时，用消息总线发任务/问题（避免歧义与重复执行）：`./scripts/bus-send.sh --session {{SESSION_ID}} --from builder-a --to reviewer --intent question --message "<...>"`。
+6. 无人值守协作（对标 team 模式）：
+   - 你完成实现后，必须主动把“评审/验收”接力派给 Reviewer/Tester（不要等 Lead 人工转发）。
+   - 推荐在你最终输出里追加路由指令（Router 会自动投递，不需要手动跑脚本）：
+
+     `::bus-send{to="reviewer" intent="review" risk="low" message="请评审：改动点/风险点/合并建议。回执里贴关键 diff/证据路径。"}`
+
+     `::bus-send{to="tester" intent="test" risk="low" message="请按 shared/verify.md 验收并回写结果；失败请给最小复现+日志。" accept="pytest -q"}`
+
+   - 需要澄清/补上下文时也用同样方式：
+     `::bus-send{to="lead" intent="question" risk="low" message="我需要确认：..."}`
+   - 仅当指令无法满足时，才用脚本直发：
+     `./scripts/bus-send.sh --session {{SESSION_ID}} --from builder-a --to reviewer --intent question --message "<...>"`。

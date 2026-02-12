@@ -24,6 +24,22 @@
 - 所有“最终结论”只能落在 `shared/*.md`，不要只写在 outbox。
 - 无人值守模式下，派工与追问建议通过消息总线 `bus/inbox/<role>/`（见 `docs/bus.md`），避免对话歧义与重复执行。
 
+### Intent 路由约定（建议）
+
+为了让“分类 + 路由”能自动闭环，推荐在 bus 消息里使用固定的 `intent`：
+
+| intent | 典型发送者 | 典型接收者 | 语义 |
+| --- | --- | --- | --- |
+| bootstrap | system/lead | lead | 读取 task 并拆解派工 |
+| implement | lead | builder-* | 实现任务（必须含 acceptance） |
+| review | lead/builder-* | reviewer | 评审并给出合并建议或必改项 |
+| test | lead/builder-* | tester | 验收并写回 verify 证据 |
+| fix | reviewer/tester/lead | builder-* | 补修/补证据（必须给可复制验收点） |
+| question | 任意 | 任意 | 需要澄清（必须是具体问题） |
+| info | 任意 | lead | 非阻塞信息同步（便于收敛） |
+
+无人值守推荐结合 `::bus-send{...}` 路由指令（见 `docs/bus.md`），让角色在回执里直接触发下一跳。
+
 ## 3. 交付契约（每个 outbox 必须包含）
 
 最小交付格式（建议直接按模板填）：

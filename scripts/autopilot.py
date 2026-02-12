@@ -251,10 +251,14 @@ Message file to process: {msg_path}
 
 Rules:
 - Do not ask the human for input.
-- If you need clarification, send a bus message to the appropriate role using:
-  ./scripts/bus-send.sh --session {session} --from {role} --to <role> --intent question --message "<...>"
+- If you need clarification or want to hand off work, either:
+  - emit a directive in your final message (router will execute it):
+    ::bus-send{{to="lead" intent="question" risk="low" message="..." }}
+  - or (fallback) send a bus message manually:
+    ./scripts/bus-send.sh --session {session} --from {role} --to <role> --intent question --message "<...>"
 - Do not process messages outside your role.
 - Prefer writing results to your role outbox/worklog. Only write shared files if your role is the owner per prompt.
+ - If you want Reviewer/Tester to act next, include ::bus-send directives (router will deliver them).
 
 Task:
 Read the message file content below and execute it end-to-end (code changes + verification + writeback).

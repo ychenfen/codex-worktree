@@ -207,6 +207,162 @@ def receipt_intent(status: str) -> str:
     return "receipt"
 
 
+def parse_kv_block(s: str) -> Dict[str, str]:
+    """
+    Parse a directive argument block like:
+      to="reviewer" intent="review" message="..."
+    into a dict. Supports quoted values with \\" escaping.
+    """
+    out: Dict[str, str] = {}
+    i = 0
+    n = len(s)
+    while i < n:
+        while i < n and s[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        # key
+        k_start = i
+        while i < n and (s[i].isalnum() or s[i] in "_-"):
+            i += 1
+        key = s[k_start:i]
+        while i < n and s[i].isspace():
+            i += 1
+        if not key or i >= n or s[i] != "=":
+            break
+        i += 1
+        while i < n and s[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        val = ""
+        if s[i] == '"':
+            i += 1
+            buf = []
+            while i < n:
+                ch = s[i]
+                if ch == "\\" and i + 1 < n:
+                    buf.append(s[i + 1])
+                    i += 2
+                    continue
+                if ch == '"':
+                    i += 1
+                    break
+                buf.append(ch)
+                i += 1
+            val = "".join(buf)
+        else:
+            v_start = i
+            while i < n and not s[i].isspace():
+                i += 1
+            val = s[v_start:i]
+        out[key] = val
+    return out
+
+
+def parse_bus_send_directives(text: str) -> List[Dict[str, str]]:
+    """
+    Parse directives from receipt/body:
+      ::bus-send{to="reviewer" intent="review" risk="low" message="..."}
+    """
+    out: List[Dict[str, str]] = []
+    for m in re.finditer(r"::bus-send\{([^}]*)\}", text):
+        args = parse_kv_block(m.group(1))
+        if args:
+            out.append(args)
+    return out
+
+
+def allowed_intent(sender_role: str, intent: str) -> bool:
+    """
+    Guardrail to keep "team mode" coherent:
+    - Lead can dispatch anything.
+    - Others can dispatch follow-ups (review/test/fix/question/info), but not new "implement" tasks.
+    """
+    intent = (intent or "").strip().lower()
+    if not intent:
+        return False
+    if sender_role == "lead":
+        return True
+    return intent in ("question", "review", "test", "fix", "info", "alert")
+
+
+def valid_role(roles: List[str], r: str) -> bool:
+    r = (r or "").strip()
+    return bool(r) and r in roles
+
+
+def dispatch_from_receipt(
+    sp: SessionPaths,
+    roles: List[str],
+    *,
+    worker_role: str,
+    thread: str,
+    receipt_id: str,
+    directives: List[Dict[str, str]],
+    dry_run: bool,
+) -> None:
+    for d in directives:
+        to_role = (d.get("to") or "").strip()
+        intent = (d.get("intent") or "").strip()
+        risk = (d.get("risk") or "low").strip()
+        message = (d.get("message") or "").strip()
+        accept = (d.get("accept") or "").strip()
+
+        if not valid_role(roles, to_role):
+            # Invalid target: notify lead only.
+            if not dry_run and "lead" in roles:
+                enqueue_bus_message(
+                    sp,
+                    to_role="lead",
+                    from_role="router",
+                    intent="alert",
+                    thread=thread,
+                    risk="medium",
+                    body=f'Invalid ::bus-send target role "{to_role}" from receipt {receipt_id} (worker={worker_role}).',
+                )
+            continue
+        if not allowed_intent(worker_role, intent):
+            if not dry_run and "lead" in roles:
+                enqueue_bus_message(
+                    sp,
+                    to_role="lead",
+                    from_role="router",
+                    intent="alert",
+                    thread=thread,
+                    risk="medium",
+                    body=f'Disallowed ::bus-send intent "{intent}" from worker {worker_role} (receipt {receipt_id}).',
+                )
+            continue
+        if not message:
+            continue
+
+        body = "\n".join(
+            [
+                "Auto-dispatched by router from a worker receipt.",
+                "",
+                f"- receipt_id: {receipt_id}",
+                f"- worker_role: {worker_role}",
+                "",
+                message,
+                "",
+            ]
+        )
+        if accept:
+            body += "\nAcceptance:\n- " + accept + "\n"
+
+        if not dry_run:
+            enqueue_bus_message(
+                sp,
+                to_role=to_role,
+                from_role=worker_role,
+                intent=intent,
+                thread=thread,
+                risk=risk or "low",
+                body=body,
+            )
+
+
 def process_receipt(sp: SessionPaths, roles: List[str], receipt_path: Path, dry_run: bool) -> bool:
     raw = read_text(receipt_path)
     cur_hash = sha256_text(raw)
@@ -233,6 +389,18 @@ def process_receipt(sp: SessionPaths, roles: List[str], receipt_path: Path, dry_
         mkdirp(st_file.parent)
         atomic_write(st_file, cur_hash + "\n")
         return True
+
+    directives = parse_bus_send_directives(raw)
+    if directives:
+        dispatch_from_receipt(
+            sp,
+            roles=roles,
+            worker_role=role,
+            thread=thread,
+            receipt_id=mid,
+            directives=directives,
+            dry_run=dry_run,
+        )
 
     intent = receipt_intent(status)
     risk = "medium" if intent == "alert" else "low"

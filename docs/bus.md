@@ -75,6 +75,21 @@ finished_at: "2026-02-12 23:59:59"
 
 mac 上用 `./scripts/autopilot.sh start <sid>` 会自动启动 router 守护进程。
 
+## 路由指令（对标 team 模式：自动接力派工）
+
+为了做到“收到消息就自己执行，不需要人手动输入”，worker 可以在 **最终输出** 里追加指令，Router 会自动把它们转成 bus 消息投递到目标角色 inbox：
+
+```text
+::bus-send{to="reviewer" intent="review" risk="low" message="请评审这次改动：..."}
+::bus-send{to="tester" intent="test" risk="low" message="请验收：..." accept="pytest -q"}
+::bus-send{to="builder-a" intent="fix" risk="high" message="必改：..." accept="pytest -q"}
+```
+
+说明：
+- 指令只在回执里生效（即 worker 完成一次处理后写入 `bus/outbox` 的最后输出）。
+- Router 会对回执做 hash 去重，避免重复派工。
+- 保护规则：非 Lead 角色默认不允许派发 `intent="implement"`（避免无限扩散的“自生任务”）。
+
 ## Autopilot
 
 Autopilot 守护进程会轮询 `bus/inbox/<role>/`：
