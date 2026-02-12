@@ -37,6 +37,18 @@
 ./scripts/autopilot.sh start <session-id>
 ```
 
+如需强制指定模型（当 `~/.codex/config.toml` 里配置了不可用 model 时）：
+
+```bash
+./scripts/autopilot.sh start <session-id> 2 --model gpt-5.2-codex
+```
+
+也可用 `--dry-run` 验证队列/锁/回执链路（不调用模型）：
+
+```bash
+./scripts/autopilot.sh start <session-id> 2 --dry-run
+```
+
 说明：
 - 会同时启动 `router` 守护进程，用于把 `bus/outbox/*.md` 回执转发为 `bus/inbox/*/*.md` 消息（Lead/Requester 自动收到进展）。
 

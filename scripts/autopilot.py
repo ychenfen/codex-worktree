@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 
 ROLE_ORDER = ["lead", "builder-a", "builder-b", "reviewer", "tester"]
+DEFAULT_FALLBACK_MODELS = ["gpt-5.2-codex", "gpt-5.2", "gpt-5.1-codex-max"]
 
 
 @dataclass
@@ -190,6 +191,77 @@ def parse_frontmatter(md: str) -> Tuple[Dict[str, object], str]:
     return {}, md
 
 
+def _read_codex_config_model() -> str:
+    cfg = Path.home() / ".codex" / "config.toml"
+    if not cfg.exists():
+        return ""
+    try:
+        text = cfg.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    m = re.search(r'^\s*model\s*=\s*"([^"]+)"\s*$', text, flags=re.M)
+    return m.group(1).strip() if m else ""
+
+
+def _read_codex_models_cache() -> List[Dict[str, object]]:
+    path = Path.home() / ".codex" / "models_cache.json"
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    models = data.get("models")
+    return models if isinstance(models, list) else []
+
+
+def choose_model(cli_model: str = "") -> str:
+    """
+    Pick a model that exists for this machine/account.
+    - Prefer explicit CLI arg.
+    - Else respect env overrides.
+    - Else validate ~/.codex/config.toml's model against ~/.codex/models_cache.json.
+    - Else fall back to a known-good codex model if present in cache.
+    """
+    if cli_model:
+        return cli_model
+
+    env_model = (os.environ.get("CODEX_AUTOPILOT_MODEL") or os.environ.get("CODEX_MODEL") or "").strip()
+    if env_model:
+        return env_model
+
+    cfg_model = _read_codex_config_model()
+    cache = _read_codex_models_cache()
+    slugs = {str(m.get("slug", "")).strip(): m for m in cache if isinstance(m, dict)}
+
+    if cfg_model and cfg_model in slugs:
+        return cfg_model
+
+    # Prefer a stable codex model from cache.
+    for s in DEFAULT_FALLBACK_MODELS:
+        if s in slugs:
+            return s
+
+    # Otherwise pick the highest-priority listed codex-ish model.
+    best = ""
+    best_pri = -10**9
+    for s, meta in slugs.items():
+        if "codex" not in s:
+            continue
+        try:
+            pri = int(meta.get("priority", 0))
+        except Exception:
+            pri = 0
+        if pri > best_pri:
+            best_pri = pri
+            best = s
+    if best:
+        return best
+
+    # Last resort: return config even if invalid; codex will error clearly.
+    return cfg_model
+
+
 def inbox_dir(sp: SessionPaths, role: str) -> Path:
     return sp.bus / "inbox" / role
 
@@ -271,7 +343,7 @@ Message content:
     return base + "\n" + extra.strip() + "\n"
 
 
-def codex_exec(role_cwd: Path, prompt: str, out_last: Path) -> int:
+def codex_exec(role_cwd: Path, prompt: str, out_last: Path, *, model: str) -> int:
     mkdirp(out_last.parent)
     cmd = [
         "codex",
@@ -280,6 +352,8 @@ def codex_exec(role_cwd: Path, prompt: str, out_last: Path) -> int:
         "exec",
         "-s",
         "workspace-write",
+        "-m",
+        model,
         "--cd",
         str(role_cwd),
         "--output-last-message",
@@ -326,7 +400,7 @@ def write_receipt(
     out.write_text(text, encoding="utf-8")
 
 
-def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_run: bool) -> bool:
+def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_run: bool, *, model: str) -> bool:
     msg_path = next_message_file(sp, role)
     if not msg_path:
         return False
@@ -389,7 +463,7 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
             last_msg = "DRY_RUN: skipped codex exec."
         else:
             with DirLock(global_lock, timeout_s=1800.0):
-                codex_rc = codex_exec(role_cwd=role_cwd, prompt=prompt, out_last=last_msg_path)
+                codex_rc = codex_exec(role_cwd=role_cwd, prompt=prompt, out_last=last_msg_path, model=model)
             if last_msg_path.exists():
                 last_msg = last_msg_path.read_text(encoding="utf-8")
             else:
@@ -438,7 +512,7 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
             pass
 
 
-def daemon(session: str, role: str, poll_s: float, dry_run: bool) -> int:
+def daemon(session: str, role: str, poll_s: float, dry_run: bool, *, model: str) -> int:
     start_dir = Path.cwd()
     main = git_main_worktree(start_dir)
     sp = session_paths(main, session)
@@ -458,12 +532,12 @@ def daemon(session: str, role: str, poll_s: float, dry_run: bool) -> int:
     role_cwd = worktrees.get(role, sp.main_worktree)
 
     while True:
-        did = process_one(sp, session=session, role=role, role_cwd=role_cwd, dry_run=dry_run)
+        did = process_one(sp, session=session, role=role, role_cwd=role_cwd, dry_run=dry_run, model=model)
         if not did:
             time.sleep(poll_s)
 
 
-def run_once(session: str, role: str, dry_run: bool) -> int:
+def run_once(session: str, role: str, dry_run: bool, *, model: str) -> int:
     start_dir = Path.cwd()
     main = git_main_worktree(start_dir)
     sp = session_paths(main, session)
@@ -471,7 +545,7 @@ def run_once(session: str, role: str, dry_run: bool) -> int:
     ensure_session_dirs(sp, roles=roles)
     worktrees = parse_role_worktrees(sp.session_root / "SESSION.md")
     role_cwd = worktrees.get(role, sp.main_worktree)
-    did = process_one(sp, session=session, role=role, role_cwd=role_cwd, dry_run=dry_run)
+    did = process_one(sp, session=session, role=role, role_cwd=role_cwd, dry_run=dry_run, model=model)
     return 0 if did else 3
 
 
@@ -484,17 +558,20 @@ def main() -> int:
     d.add_argument("--role", required=True)
     d.add_argument("--poll", type=float, default=2.0)
     d.add_argument("--dry-run", action="store_true")
+    d.add_argument("--model", default="", help="Codex model override (default: auto-detect).")
 
     o = sub.add_parser("once", help="Process at most one message and exit.")
     o.add_argument("--session", required=True)
     o.add_argument("--role", required=True)
     o.add_argument("--dry-run", action="store_true")
+    o.add_argument("--model", default="", help="Codex model override (default: auto-detect).")
 
     args = ap.parse_args()
+    model = choose_model(args.model)
     if args.cmd == "daemon":
-        return daemon(session=args.session, role=args.role, poll_s=args.poll, dry_run=args.dry_run)
+        return daemon(session=args.session, role=args.role, poll_s=args.poll, dry_run=args.dry_run, model=model)
     if args.cmd == "once":
-        return run_once(session=args.session, role=args.role, dry_run=args.dry_run)
+        return run_once(session=args.session, role=args.role, dry_run=args.dry_run, model=model)
     raise AssertionError("unreachable")
 
 

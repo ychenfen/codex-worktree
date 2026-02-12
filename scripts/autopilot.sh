@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/autopilot.sh start <session-id> [poll_seconds]
+  ./scripts/autopilot.sh start <session-id> [poll_seconds] [--model <model>] [--dry-run]
   ./scripts/autopilot.sh stop <session-id>
   ./scripts/autopilot.sh status <session-id>
 
@@ -17,11 +17,39 @@ EOF
 
 cmd="${1:-}"
 session="${2:-}"
-poll="${3:-2}"
 
 if [[ -z "${cmd:-}" || -z "${session:-}" ]]; then
   usage
   exit 2
+fi
+
+shift 2 || true
+
+poll="2"
+model=""
+dry_run=0
+
+if [[ "$cmd" == "start" ]]; then
+  # Optional positional poll seconds.
+  if [[ $# -gt 0 && "$1" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    poll="$1"
+    shift
+  fi
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --model) model="${2:-}"; shift 2 ;;
+      --dry-run) dry_run=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
+    esac
+  done
+else
+  if [[ $# -gt 0 ]]; then
+    echo "Unknown arg: $1" >&2
+    usage
+    exit 2
+  fi
 fi
 
 TOP="$(git rev-parse --show-toplevel 2>/dev/null || true)"
@@ -67,13 +95,24 @@ case "$cmd" in
 
     # Router: forwards outbox receipts into inbox messages (lead + requester).
     log="$PIDS_DIR/router.log"
-    nohup python3 "$MAIN/scripts/router.py" daemon --session "$session" --poll "$poll" \
+    router_cmd=(python3 "$MAIN/scripts/router.py" daemon --session "$session" --poll "$poll")
+    if [[ "$dry_run" == "1" ]]; then
+      router_cmd+=(--dry-run)
+    fi
+    nohup "${router_cmd[@]}" \
       >"$log" 2>&1 &
     echo "router $!" >>"$PIDS_FILE"
 
     while read -r role; do
       log="$PIDS_DIR/$role.log"
-      nohup python3 "$MAIN/scripts/autopilot.py" daemon --session "$session" --role "$role" --poll "$poll" \
+      worker_cmd=(python3 "$MAIN/scripts/autopilot.py" daemon --session "$session" --role "$role" --poll "$poll")
+      if [[ "$dry_run" == "1" ]]; then
+        worker_cmd+=(--dry-run)
+      fi
+      if [[ -n "${model:-}" ]]; then
+        worker_cmd+=(--model "$model")
+      fi
+      nohup "${worker_cmd[@]}" \
         >"$log" 2>&1 &
       echo "$role $!" >>"$PIDS_FILE"
     done < <(roles)
