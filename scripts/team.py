@@ -3,6 +3,7 @@ import argparse
 import os
 import re
 import select
+import shlex
 import sys
 import time
 from dataclasses import dataclass
@@ -193,6 +194,64 @@ def format_receipt(receipt_path: Path) -> str:
     return head
 
 
+def _is_safe_shell_command(cmd: str) -> bool:
+    # Allow an override for power users.
+    if (os.environ.get("TEAM_SH_UNSAFE") or "").strip() in ("1", "true", "yes"):
+        return True
+
+    tokens: List[str] = []
+    try:
+        tokens = shlex.split(cmd)
+    except Exception:
+        return False
+
+    # Skip leading VAR=... assignments.
+    i = 0
+    while i < len(tokens) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[i]):
+        i += 1
+    if i >= len(tokens):
+        return True
+
+    head = tokens[i]
+    allowed = {
+        "ls",
+        "tail",
+        "head",
+        "cat",
+        "find",
+        "rg",
+        "grep",
+        "sed",
+        "awk",
+        "git",
+        "pwd",
+        "echo",
+        "stat",
+        "python3",
+        "bash",
+        "zsh",
+    }
+    if head in allowed:
+        return True
+    if head.startswith("./scripts/"):
+        return True
+    return False
+
+
+def run_shell(cmd: str, cwd: Path) -> Tuple[int, str]:
+    import subprocess
+
+    p = subprocess.run(
+        ["bash", "-lc", cmd],
+        cwd=str(cwd),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    return p.returncode, p.stdout
+
+
 def repl(session: str) -> int:
     main = git_main_worktree(Path.cwd())
     sp = session_paths(main, session)
@@ -206,7 +265,7 @@ def repl(session: str) -> int:
         mkdirp(sp.bus_inbox / r)
 
     print(f"Team CLI attached: {session}")
-    print('Commands: /help, /task <text>, /accept <line>, /bootstrap, /send <to> <intent> <msg>, /outbox, /status, /exit')
+    print('Commands: /help, /task <text>, /accept <line>, /bootstrap, /send <to> <intent> <msg>, /outbox, /status, /sh <cmd>, /exit')
     print('Default: plain text is sent to lead as a chat message (Claude Code-like). Use /task + /bootstrap for actionable work.')
 
     accept_buf: List[str] = []
@@ -263,6 +322,7 @@ def repl(session: str) -> int:
             print("  /send <to> <intent> <msg>  send a bus message")
             print("  /outbox                show last 5 receipts")
             print("  /status                show basic session paths")
+            print("  /sh <cmd>              run a *safe* shell command in repo root (set TEAM_SH_UNSAFE=1 to allow any)")
             print("  /exit                  quit (does not stop daemons)")
             continue
 
@@ -326,6 +386,23 @@ def repl(session: str) -> int:
             print(f"outbox: {sp.bus_outbox}")
             print(f"inbox: {sp.bus_inbox}")
             print(f"shared: {sp.shared}")
+            continue
+
+        if line.startswith("/sh "):
+            cmd = line[len("/sh ") :].strip()
+            if not cmd:
+                print("usage: /sh <cmd>")
+                continue
+            if not _is_safe_shell_command(cmd):
+                print("blocked: command not in safe allowlist. Set TEAM_SH_UNSAFE=1 to override.")
+                continue
+            rc, out = run_shell(cmd, cwd=sp.main_worktree)
+            out_lines = out.splitlines()
+            max_lines = 200
+            if len(out_lines) > max_lines:
+                out_lines = out_lines[:max_lines] + [f"... (truncated; {len(out.splitlines())} lines total)"]
+            print("\n".join(out_lines))
+            print(f"(rc={rc})")
             continue
 
         if line.startswith("/exit"):
