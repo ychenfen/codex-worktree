@@ -70,13 +70,19 @@ fi
 
 # Start daemons if not running.
 PIDS_FILE="$SESSION_ROOT/artifacts/autopilot/pids.txt"
-if [[ ! -f "$PIDS_FILE" ]]; then
-  start_args=("$session" "$poll")
-  if [[ -n "${model:-}" ]]; then
-    start_args+=("--model" "$model")
+start_args=("$session" "$poll")
+if [[ -n "${model:-}" ]]; then
+  start_args+=("--model" "$model")
+fi
+
+if [[ -f "$PIDS_FILE" ]]; then
+  status_out="$("$MAIN/scripts/autopilot.sh" status "$session" 2>/dev/null || true)"
+  if echo "$status_out" | grep -q " DEAD "; then
+    "$MAIN/scripts/autopilot.sh" stop "$session" || true
+    "$MAIN/scripts/autopilot.sh" start "${start_args[@]}"
   fi
+else
   "$MAIN/scripts/autopilot.sh" start "${start_args[@]}"
 fi
 
 python3 "$MAIN/scripts/team.py" repl --session "$session"
-
