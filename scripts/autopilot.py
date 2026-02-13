@@ -391,7 +391,7 @@ Message content:
     return base + "\n" + extra.strip() + "\n"
 
 
-def codex_exec(role_cwd: Path, prompt: str, out_last: Path, *, model: str) -> int:
+def codex_exec(role_cwd: Path, prompt: str, out_last: Path, *, model: str, add_dirs: List[Path]) -> int:
     mkdirp(out_last.parent)
     cmd = [
         "codex",
@@ -402,6 +402,10 @@ def codex_exec(role_cwd: Path, prompt: str, out_last: Path, *, model: str) -> in
         "workspace-write",
         "-m",
         model,
+    ]
+    for d in add_dirs:
+        cmd.extend(["--add-dir", str(d)])
+    cmd += [
         "--cd",
         str(role_cwd),
         "--output-last-message",
@@ -517,8 +521,23 @@ def process_one(sp: SessionPaths, session: str, role: str, role_cwd: Path, dry_r
         if dry_run:
             last_msg = "DRY_RUN: skipped codex exec."
         else:
+            # Recover stale global lock (crash-safe).
+            if global_lock.exists():
+                pid_file = global_lock / "pid"
+                try:
+                    pid = int(pid_file.read_text(encoding="utf-8").strip()) if pid_file.exists() else 0
+                except Exception:
+                    pid = 0
+                if pid <= 0 or not _pid_alive(pid):
+                    _cleanup_lockdir(global_lock)
             with DirLock(global_lock, timeout_s=1800.0):
-                codex_rc = codex_exec(role_cwd=role_cwd, prompt=prompt, out_last=last_msg_path, model=model)
+                codex_rc = codex_exec(
+                    role_cwd=role_cwd,
+                    prompt=prompt,
+                    out_last=last_msg_path,
+                    model=model,
+                    add_dirs=[sp.session_root],
+                )
             if last_msg_path.exists():
                 last_msg = last_msg_path.read_text(encoding="utf-8")
             else:
