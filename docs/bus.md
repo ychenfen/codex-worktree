@@ -13,6 +13,7 @@
 - `state/processing/`：处理中锁（目录锁，避免重复执行）。
 - `state/done/`：完成哨兵（幂等）。
 - `state/archive/<role>/`：已处理消息归档。
+- `state/tasks/tasks.json`：任务状态机（`pending / in_progress / completed / failed` + `depends_on`）。
 
 - `artifacts/locks/`：全局锁（串行化执行，避免共享文件冲突）。
 
@@ -28,6 +29,7 @@ to: builder-a
 intent: implement
 thread: <sid>
 risk: low
+task_id: T20260216-113245-e34a71
 acceptance:
   - "..."
   - "..."
@@ -38,6 +40,27 @@ acceptance:
 规则：
 - `id` 必须全局唯一（同会话内）。
 - worker 只处理 `to == <role>` 的消息。
+- 推荐带 `task_id`，让消息与任务状态机一一对应（便于 claim/完成判定）。
+
+## 任务状态机（Task Board）
+
+对标 team 模式的最小任务模型：
+- `pending`：待领取
+- `in_progress`：已领取执行中
+- `completed`：已完成
+- `failed`：达到重试上限或终止
+
+依赖关系：
+- `depends_on` 中的任务必须全部 `completed`，当前任务才能被 claim。
+
+CLI：
+
+```bash
+python3 ./scripts/tasks.py list --session <sid>
+python3 ./scripts/tasks.py add --session <sid> --title "..." --owner builder-a --accept "pytest -q"
+python3 ./scripts/tasks.py claim --session <sid> --role builder-a --task <task_id>
+python3 ./scripts/tasks.py complete --session <sid> --role builder-a --task <task_id>
+```
 
 ## 幂等与无冲突
 
@@ -60,6 +83,7 @@ request_intent: "implement"
 status: done
 codex_rc: 0
 finished_at: "2026-02-12 23:59:59"
+task_id: "T20260216-113245-e34a71"
 ---
 <codex 最后一条消息（或摘要）>
 ```
@@ -83,16 +107,38 @@ mac 上用 `./scripts/autopilot.sh start <sid>` 会自动启动 router 守护进
 ::bus-send{to="reviewer" intent="review" risk="low" message="请评审这次改动：..."}
 ::bus-send{to="tester" intent="test" risk="low" message="请验收：..." accept="pytest -q"}
 ::bus-send{to="builder-a" intent="fix" risk="high" message="必改：..." accept="pytest -q"}
+::bus-send{to="reviewer,tester" intent="info" risk="low" message="同步：..."}
+::bus-send{to="all" intent="info" risk="low" message="广播：..."}
 ```
 
 说明：
 - 指令只在回执里生效（即 worker 完成一次处理后写入 `bus/outbox` 的最后输出）。
 - Router 会对回执做 hash 去重，避免重复派工。
 - 保护规则：非 Lead 角色默认不允许派发 `intent="implement"`（避免无限扩散的“自生任务”）。
+- `to` 支持多目标：`to="r1,r2"`（逗号分隔）与广播：`to="all"`（发送给除发送者外的所有角色）。
 
 ## Autopilot
 
 Autopilot 守护进程会轮询 `bus/inbox/<role>/`：
 - 有消息则自动调用 `codex exec` 执行；
 - 失败会重试，超过次数进入 `deadletter/`；
-- 执行默认用全局锁串行化（稳，避免共享文件写冲突）。
+- 默认并行执行（更接近 Claude Code team 模式）；如需保守串行可启用全局锁：
+  - `./scripts/autopilot.sh start <sid> 2 --serial`
+  - 或设置环境变量：`export AUTOPILOT_GLOBAL_LOCK=1`
+
+补充（任务状态机模式）：
+- `lead/bootstrap` 会自动把 `shared/task.md` 变成任务图并写入 `state/tasks/tasks.json`。
+- 任务完成时会自动检查 `depends_on`，把新解锁的任务自动投递到对应 `bus/inbox/<owner>/`。
+
+## bus-send.sh（CLI 发消息）
+
+```bash
+./scripts/bus-send.sh --session <sid> --from <role> --to <role>
+./scripts/bus-send.sh --session <sid> --from <role> --to reviewer,tester
+./scripts/bus-send.sh --session <sid> --from <role> --to all
+./scripts/bus-send.sh --session <sid> --from <role> --to reviewer --to tester
+```
+
+说明：
+- `--to` 支持多次指定；也支持逗号分隔；`all` 表示广播到所有角色（排除 `--from` 本人）。
+- 若同时使用 `--task <task_id>` 且目标不止一个，脚本会警告并跳过 task dispatch 更新（避免 task_id 绑定到多条消息产生歧义）。

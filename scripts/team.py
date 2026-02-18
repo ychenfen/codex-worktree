@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from task_board import add_task, ensure_task_board, format_task_brief, list_tasks, set_dispatch
+
 
 ROLE_ORDER = ["lead", "builder-a", "builder-b", "reviewer", "tester"]
 
@@ -24,7 +26,7 @@ class SessionPaths:
     artifacts: Path
 
 
-def _run(cmd: List[str], cwd: Optional[Path] = None) -> str:
+def _run(cmd: List[str], cwd: Optional[Path] = None, timeout_s: Optional[float] = None) -> str:
     import subprocess
 
     p = subprocess.run(
@@ -33,6 +35,7 @@ def _run(cmd: List[str], cwd: Optional[Path] = None) -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        timeout=timeout_s,
         check=False,
     )
     if p.returncode != 0:
@@ -42,10 +45,14 @@ def _run(cmd: List[str], cwd: Optional[Path] = None) -> str:
 
 def git_main_worktree(start_dir: Path) -> Path:
     top = _run(["git", "-C", str(start_dir), "rev-parse", "--show-toplevel"]).strip()
-    lines = _run(["git", "-C", top, "worktree", "list", "--porcelain"]).splitlines()
-    for line in lines:
-        if line.startswith("worktree "):
-            return Path(line.split(" ", 1)[1]).resolve()
+    common = _run(["git", "-C", top, "rev-parse", "--git-common-dir"]).strip()
+    common_path = Path(common)
+    if not common_path.is_absolute():
+        common_path = (Path(top) / common_path).resolve()
+    if common_path.name == ".git":
+        return common_path.parent.resolve()
+    if common_path.parent.name == "worktrees" and common_path.parent.parent.name == ".git":
+        return common_path.parent.parent.parent.resolve()
     return Path(top).resolve()
 
 
@@ -137,24 +144,30 @@ def enqueue_message(
     risk: str,
     body: str,
     mid: Optional[str] = None,
+    task_id: str = "",
 ) -> Path:
     mid = mid or new_id("")
     out = sp.bus_inbox / to_role / f"{mid}.md"
-    text = "\n".join(
+    header = [
+        "---",
+        f"id: {mid}",
+        f"from: {from_role}",
+        f"to: {to_role}",
+        f"intent: {intent}",
+        f"thread: {thread}",
+        f"risk: {risk}",
+    ]
+    if task_id.strip():
+        header.append(f"task_id: {task_id.strip()}")
+    header.extend(
         [
-            "---",
-            f"id: {mid}",
-            f"from: {from_role}",
-            f"to: {to_role}",
-            f"intent: {intent}",
-            f"thread: {thread}",
-            f"risk: {risk}",
             "---",
             "",
             body.rstrip(),
             "",
         ]
     )
+    text = "\n".join(header)
     atomic_write(out, text)
     return out
 
@@ -261,11 +274,12 @@ def repl(session: str) -> int:
 
     roles = list_roles(sp)
     mkdirp(sp.bus_outbox)
+    ensure_task_board(sp.session_root)
     for r in roles:
         mkdirp(sp.bus_inbox / r)
 
     print(f"Team CLI attached: {session}")
-    print('Commands: /help, /task <text>, /accept <line>, /bootstrap, /send <to> <intent> <msg>, /outbox, /status, /sh <cmd>, /exit')
+    print("Commands: /help, /task <text>, /accept <line>, /bootstrap, /tasks [status], /tadd <role> <title>, /send <to> <intent> <msg> [--task <id>], /outbox, /status, /sh <cmd>, /exit")
     print('Default: plain text is sent to lead as a chat message (Claude Code-like). Use /task + /bootstrap for actionable work.')
 
     accept_buf: List[str] = []
@@ -318,8 +332,10 @@ def repl(session: str) -> int:
         if line.startswith("/help"):
             print("  /task <text>           write shared/task.md (keeps /accept buffer)")
             print("  /accept <line>         add an acceptance line (repeatable)")
-            print("  /bootstrap             send bootstrap to lead (read shared/task.md and dispatch)")
-            print("  /send <to> <intent> <msg>  send a bus message")
+            print("  /bootstrap             send bootstrap to lead (auto-plan tasks graph from shared/task.md)")
+            print("  /tasks [status]        list task-board entries (status: pending,in_progress,completed,failed)")
+            print("  /tadd <role> <title>   create a pending task and dispatch implement message with task_id")
+            print("  /send <to> <intent> <msg> [--task <id>]  send a bus message (optional task binding)")
             print("  /outbox                show last 5 receipts")
             print("  /status                show basic session paths")
             print("  /sh <cmd>              run a *safe* shell command in repo root (set TEAM_SH_UNSAFE=1 to allow any)")
@@ -350,25 +366,128 @@ def repl(session: str) -> int:
             print("enqueued bootstrap -> lead")
             continue
 
-        if line.startswith("/send "):
-            parts = line.split(" ", 3)
-            if len(parts) < 4:
-                print("usage: /send <to> <intent> <msg>")
+        if line.startswith("/tasks"):
+            arg = line[len("/tasks") :].strip()
+            statuses = [s for s in re.split(r"[,\s]+", arg) if s] if arg else []
+            tasks = list_tasks(sp.session_root, statuses=statuses or None)
+            if not tasks:
+                print("(no tasks)")
                 continue
-            _, to_role, intent, msg = parts
+            counts: Dict[str, int] = {}
+            for t in tasks:
+                st = str(t.get("status", "")).strip() or "unknown"
+                counts[st] = counts.get(st, 0) + 1
+            print(
+                "tasks:"
+                + "".join(
+                    [
+                        f" total={len(tasks)}",
+                        f" pending={counts.get('pending', 0)}",
+                        f" in_progress={counts.get('in_progress', 0)}",
+                        f" completed={counts.get('completed', 0)}",
+                        f" failed={counts.get('failed', 0)}",
+                    ]
+                )
+            )
+            for t in tasks[:50]:
+                print(format_task_brief(t))
+            if len(tasks) > 50:
+                print(f"... ({len(tasks) - 50} more)")
+            continue
+
+        if line.startswith("/tadd "):
+            parts = line.split(" ", 2)
+            if len(parts) < 3:
+                print("usage: /tadd <role> <title>")
+                continue
+            _, to_role, title = parts
+            title = title.strip()
             if to_role not in roles:
                 print(f"invalid role: {to_role}")
                 continue
-            enqueue_message(
+            if not title:
+                print("usage: /tadd <role> <title>")
+                continue
+            task = add_task(
+                sp.session_root,
+                title=title,
+                created_by="lead",
+                owner=to_role,
+                work_type="implement",
+                risk="low",
+                acceptance=accept_buf,
+                depends_on=[],
+                intent="implement",
+            )
+            task_id = str(task.get("id", "")).strip()
+            body_lines = [f"[Task {task_id}] {title}"]
+            if accept_buf:
+                body_lines.append("")
+                body_lines.append("Acceptance:")
+                for a in accept_buf:
+                    aa = a.strip()
+                    if aa:
+                        body_lines.append(f"- {aa}")
+            p = enqueue_message(
                 sp,
                 to_role=to_role,
-                from_role="user",
-                intent=intent,
+                from_role="lead",
+                intent="implement",
                 thread=session,
                 risk="low",
-                body=msg,
+                body="\n".join(body_lines),
+                task_id=task_id,
             )
-            print(f"enqueued -> {to_role}")
+            set_dispatch(
+                sp.session_root,
+                task_id=task_id,
+                from_role="lead",
+                to_role=to_role,
+                intent="implement",
+                message_id=p.stem,
+            )
+            print(f"task created: {task_id}")
+            print(f"enqueued -> {to_role} ({p.name})")
+            continue
+
+        if line.startswith("/send "):
+            payload = line[len("/send ") :].strip()
+            task_id = ""
+            if " --task " in payload:
+                payload, task_id = payload.rsplit(" --task ", 1)
+                task_id = task_id.strip()
+            parts = payload.split(" ", 2)
+            if len(parts) < 3:
+                print("usage: /send <to> <intent> <msg> [--task <id>]")
+                continue
+            to_role, intent, msg = parts
+            if to_role != "all" and to_role not in roles:
+                print(f"invalid role: {to_role}")
+                continue
+            targets = roles if to_role == "all" else [to_role]
+            if task_id and len(targets) != 1:
+                print("warn: --task is set but /send all targets multiple roles; skipping task dispatch update")
+            for t in targets:
+                p = enqueue_message(
+                    sp,
+                    to_role=t,
+                    from_role="user",
+                    intent=intent,
+                    thread=session,
+                    risk="low",
+                    body=msg,
+                    task_id=task_id,
+                )
+                if task_id and len(targets) == 1:
+                    set_dispatch(
+                        sp.session_root,
+                        task_id=task_id,
+                        from_role="user",
+                        to_role=t,
+                        intent=intent,
+                        message_id=p.stem,
+                    )
+                print(f"enqueued -> {t}")
             continue
 
         if line.startswith("/outbox"):
@@ -386,6 +505,7 @@ def repl(session: str) -> int:
             print(f"outbox: {sp.bus_outbox}")
             print(f"inbox: {sp.bus_inbox}")
             print(f"shared: {sp.shared}")
+            print(f"task_board: {sp.session_root / 'state' / 'tasks' / 'tasks.json'}")
             continue
 
         if line.startswith("/sh "):
