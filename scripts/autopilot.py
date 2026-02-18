@@ -18,6 +18,7 @@ from task_board import (
     claim_task,
     complete_task,
     ensure_task_board,
+    get_task,
     list_dispatchable_tasks,
     list_tasks,
     mark_task_failed,
@@ -836,6 +837,73 @@ def _format_task_message(task: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def _format_task_context(sp: SessionPaths, task_id: str, *, max_receipts: int = 3) -> str:
+    tid = str(task_id or "").strip()
+    if not tid:
+        return ""
+
+    t = get_task(sp.session_root, tid)
+    if not isinstance(t, dict):
+        return f"(task not found in task board: {tid})"
+
+    core = {
+        "id": str(t.get("id", "")).strip(),
+        "title": str(t.get("title", "")).strip(),
+        "status": str(t.get("status", "")).strip(),
+        "owner": str(t.get("owner", "")).strip(),
+        "claimed_by": str(t.get("claimed_by", "")).strip(),
+        "depends_on": _normalize_list(t.get("depends_on")),
+        "acceptance": _normalize_list(t.get("acceptance")),
+        "dispatch": t.get("dispatch") if isinstance(t.get("dispatch"), dict) else {},
+    }
+
+    # Attach minimal recent receipts for this task id (improves cross-message coherence).
+    receipts: List[Dict[str, str]] = []
+    outbox = sp.bus / "outbox"
+    if outbox.is_dir():
+        files = sorted([p for p in outbox.glob("*.md") if p.is_file()], key=lambda p: p.stat().st_mtime, reverse=True)
+        for p in files:
+            if len(receipts) >= max_receipts:
+                break
+            try:
+                raw = read_text(p)
+            except Exception:
+                continue
+            fm, _ = parse_frontmatter(raw)
+            rid = str(fm.get("id", "")).strip() or p.stem
+            rtid = str(fm.get("task_id", "")).strip()
+            if rtid != tid:
+                continue
+            receipts.append(
+                {
+                    "receipt_id": rid,
+                    "role": str(fm.get("role", "")).strip(),
+                    "status": str(fm.get("status", "")).strip(),
+                    "codex_rc": str(fm.get("codex_rc", "")).strip(),
+                    "finished_at": str(fm.get("finished_at", "")).strip(),
+                    "file": str(p),
+                }
+            )
+
+    parts = [
+        "Task context (task-board + recent receipts):",
+        "",
+        "Task (summary):",
+        "```json",
+        json.dumps(core, ensure_ascii=False, indent=2),
+        "```",
+    ]
+    if receipts:
+        parts.append("")
+        parts.append(f"Recent receipts for task {tid} (newest first):")
+        for r in receipts:
+            parts.append(
+                f"- {r.get('receipt_id','?')} role={r.get('role','?')} status={r.get('status','?')} "
+                f"rc={r.get('codex_rc','?')} at={r.get('finished_at','?')} file={r.get('file','?')}"
+            )
+    return "\n".join(parts).strip()
+
+
 def dispatch_ready_tasks(
     sp: SessionPaths,
     *,
@@ -974,7 +1042,7 @@ def run_lead_bootstrap(
     return "\n".join(lines)
 
 
-def build_role_prompt(sp: SessionPaths, session: str, role: str, msg_path: Path, msg_body: str) -> str:
+def build_role_prompt(sp: SessionPaths, session: str, role: str, msg_path: Path, msg_body: str, *, task_id: str = "") -> str:
     role_prompt_path = sp.roles / role / "prompt.md"
     base = read_text(role_prompt_path).strip() if role_prompt_path.exists() else f"You are {role}."
     mem = read_recent_role_memory(sp, role=role)
@@ -987,6 +1055,15 @@ Recent role memory (tail; do not treat as authoritative requirements):
 {mem}
 ```
 """
+    task_block = ""
+    if task_id.strip():
+        task_ctx = _format_task_context(sp, task_id.strip(), max_receipts=3)
+        if task_ctx:
+            task_block = f"""
+
+{task_ctx}
+"""
+
     extra = f"""
 
 You are running under Autopilot (message bus mode) on macOS.
@@ -1005,6 +1082,7 @@ Rules:
 - Prefer writing results to your role outbox/worklog. Only write shared files if your role is the owner per prompt.
  - If you want Reviewer/Tester to act next, include ::bus-send directives (router will deliver them).
 {mem_block}
+{task_block}
 
 Task:
 Read the message file content below and execute it end-to-end (code changes + verification + writeback).
@@ -1335,7 +1413,7 @@ def process_one(
     status = "done"
     last_msg = ""
     try:
-        prompt = build_role_prompt(sp, session=session, role=role, msg_path=msg_path, msg_body=raw)
+        prompt = build_role_prompt(sp, session=session, role=role, msg_path=msg_path, msg_body=raw, task_id=task_id)
         if dry_run:
             last_msg = "DRY_RUN: skipped codex exec."
             LOG.info("dry_run_skip_codex session=%s role=%s mid=%s", session, role, mid)

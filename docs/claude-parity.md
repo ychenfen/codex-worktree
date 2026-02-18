@@ -14,7 +14,7 @@ Legend:
 ### 1) 架构与隔离
 - ✅ Lead + 多角色 worker（router + per-role daemon）
 - ✅ worktree 分角色隔离写入面（避免并行改同一工作区）
-- 🟡 “持久会话上下文”（Claude teammate 是连续会话；本项目是 message->exec，无状态；通过 role memory tail 近似）
+- 🟡 “持久会话上下文”（Claude teammate 是连续会话；本项目是 message->exec，无状态；通过 role memory tail + task receipts 注入近似）
 
 ### 2) 任务状态机（核心）
 - ✅ task board：`pending / in_progress / completed / failed`
