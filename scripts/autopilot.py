@@ -32,6 +32,7 @@ LOCK_STALE_SECONDS = int(os.environ.get("AUTOPILOT_LOCK_STALE_SECONDS", "21600")
 HEARTBEAT_SECONDS = 30.0
 DISPATCH_SCAN_SECONDS = float(os.environ.get("AUTOPILOT_DISPATCH_SCAN_SECONDS", "5"))
 DISPATCH_MAX_PER_SCAN = int(os.environ.get("AUTOPILOT_DISPATCH_MAX_PER_SCAN", "3"))
+ROLE_BOUNDARY_MODE = os.environ.get("AUTOPILOT_ROLE_BOUNDARY_MODE", "enforce").strip().lower()
 LOG = logging.getLogger("autopilot")
 USE_KQUEUE = (sys.platform == "darwin") and (os.environ.get("AUTOPILOT_USE_KQUEUE", "1") != "0")
 
@@ -1114,6 +1115,76 @@ def _utf8_safe_env() -> Tuple[Dict[str, str], List[str]]:
     return env, dropped
 
 
+def _git_changed_paths(repo_dir: Path) -> List[str]:
+    """
+    Return a stable list of paths that are changed/untracked in the given git worktree.
+    Best-effort: on failure returns [] (does not raise).
+    """
+    try:
+        p = subprocess.run(
+            ["git", "-C", str(repo_dir), "status", "--porcelain=v1"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        if p.returncode != 0:
+            return []
+        out: List[str] = []
+        for ln in p.stdout.splitlines():
+            ln = ln.rstrip("\n")
+            if not ln:
+                continue
+            # Format: XY<space>path (or "R  old -> new").
+            if len(ln) < 4:
+                continue
+            rest = ln[3:].strip()
+            if " -> " in rest:
+                rest = rest.split(" -> ", 1)[1].strip()
+            if rest:
+                out.append(rest)
+        return sorted(set(out))
+    except Exception:
+        return []
+
+
+def _role_allows_repo_writes(role: str) -> bool:
+    return role in ("builder-a", "builder-b")
+
+
+def _enforce_role_boundary(role: str, *, baseline: List[str], after: List[str]) -> Tuple[bool, str]:
+    """
+    Enforce hard role boundaries at the worktree level (not session root).
+    For non-builder roles: disallow NEW repo changes during this message handling.
+    """
+    mode = ROLE_BOUNDARY_MODE
+    if mode in ("0", "off", "false", "disabled"):
+        return True, "boundary_mode=off"
+    if _role_allows_repo_writes(role):
+        return True, "boundary_ok(builder)"
+
+    before_set = set(baseline or [])
+    after_set = set(after or [])
+    new_paths = sorted(after_set - before_set)
+    if not new_paths:
+        return True, "boundary_ok(no_new_repo_changes)"
+
+    msg = f"role_boundary_violation role={role} new_paths={new_paths[:50]}"
+    if len(new_paths) > 50:
+        msg += f" (+{len(new_paths) - 50} more)"
+
+    if mode in ("1", "enforce", "strict"):
+        return False, msg
+    # warn/default: do not fail the run, but record evidence.
+    LOG.error("BOUNDARY warn %s", msg)
+    return True, "boundary_warn"
+
+
+class RoleBoundaryError(RuntimeError):
+    pass
+
+
 def codex_exec(role_cwd: Path, prompt: str, out_last: Path, *, model: str, add_dirs: List[Path]) -> int:
     mkdirp(out_last.parent)
     env, dropped = _utf8_safe_env()
@@ -1412,7 +1483,21 @@ def process_one(
     codex_rc = 0
     status = "done"
     last_msg = ""
+    baseline_repo_paths: List[str] = []
     try:
+        if not dry_run and not _role_allows_repo_writes(role):
+            mode = ROLE_BOUNDARY_MODE
+            if mode not in ("0", "off", "false", "disabled"):
+                baseline_repo_paths = _git_changed_paths(role_cwd)
+                if baseline_repo_paths:
+                    LOG.warning(
+                        "role_worktree_dirty_before_run session=%s role=%s count=%s paths=%s",
+                        session,
+                        role,
+                        len(baseline_repo_paths),
+                        baseline_repo_paths[:20],
+                    )
+
         prompt = build_role_prompt(sp, session=session, role=role, msg_path=msg_path, msg_body=raw, task_id=task_id)
         if dry_run:
             last_msg = "DRY_RUN: skipped codex exec."
@@ -1448,6 +1533,19 @@ def process_one(
                 last_msg = "(no last message captured)"
             if codex_rc != 0:
                 raise RuntimeError(f"codex rc={codex_rc}")
+
+            # Hard boundary: non-builder roles should not produce repo changes.
+            if baseline_repo_paths is not None and not _role_allows_repo_writes(role):
+                mode = ROLE_BOUNDARY_MODE
+                if mode not in ("0", "off", "false", "disabled"):
+                    after_repo_paths = _git_changed_paths(role_cwd)
+                    ok_boundary, boundary_msg = _enforce_role_boundary(
+                        role,
+                        baseline=baseline_repo_paths,
+                        after=after_repo_paths,
+                    )
+                    if not ok_boundary:
+                        raise RoleBoundaryError(boundary_msg)
         write_receipt(
             sp,
             mid,
@@ -1491,6 +1589,47 @@ def process_one(
         mkdirp((sp.state / "archive" / role))
         msg_path.rename(archive_path(sp, role, msg_path))
         LOG.info("message_done session=%s role=%s mid=%s status=%s", session, role, mid, status)
+        return True
+    except RoleBoundaryError as e:
+        msg = str(e)
+        if task_id and task_claimed:
+            mark_task_failed(
+                sp.session_root,
+                task_id=task_id,
+                role=role,
+                error=msg,
+                terminal=True,
+            )
+        write_receipt(
+            sp,
+            mid,
+            role,
+            status="deadletter",
+            codex_rc=97,
+            last_msg=f"Role boundary violation (terminal): {msg}",
+            thread=thread,
+            request_from=request_from,
+            request_to=request_to,
+            request_intent=request_intent,
+            task_id=task_id,
+        )
+        append_role_memory(
+            sp,
+            session=session,
+            role=role,
+            mid=mid,
+            task_id=task_id,
+            intent=request_intent,
+            status="deadletter",
+            codex_rc=97,
+            summary=f"Role boundary violation (terminal): {msg}",
+        )
+        mkdirp(deadletter_path(sp, role, msg_path).parent)
+        try:
+            msg_path.rename(deadletter_path(sp, role, msg_path))
+        except Exception:
+            pass
+        LOG.error("role_boundary_deadletter session=%s role=%s mid=%s err=%s", session, role, mid, msg)
         return True
     except Exception as e:
         n += 1

@@ -45,7 +45,7 @@ Legend:
 ### 6) 权限与安全（Claude 的“可控边界”）
 - 🟡 软边界（prompt 约束）：角色职责/可写文件范围
 - 🟡 REPL `/sh` allowlist（默认安全命令）
-- ❌ 硬边界（强制执行）：按角色强制校验“禁止写共享/禁止改代码”等（超越项）
+- ✅ 硬边界（强制执行）：非 Builder 角色禁止产生新的 worktree git 变更（默认 `AUTOPILOT_ROLE_BOUNDARY_MODE=enforce`）
 
 ## 当前短板（阻塞“完全对标”的点）
 
