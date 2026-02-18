@@ -13,6 +13,8 @@ from typing import Dict, List, Optional, Tuple
 
 
 TASK_LOCK_STALE_SECONDS = int(os.environ.get("TASK_BOARD_LOCK_STALE_SECONDS", "21600"))
+# If a task has a dispatch.message_id but that bus message is missing, allow re-dispatch after this TTL.
+TASK_DISPATCH_STALE_SECONDS = int(os.environ.get("TASK_BOARD_DISPATCH_STALE_SECONDS", "3600"))
 
 
 @dataclass
@@ -81,6 +83,44 @@ def _read_json(path: Path) -> Dict[str, object]:
     if "updated_at" not in data:
         data["updated_at"] = _now()
     return data
+
+
+def _parse_ts(ts: str) -> float:
+    ts = str(ts or "").strip()
+    if not ts:
+        return 0.0
+    try:
+        return float(time.mktime(time.strptime(ts, "%Y-%m-%d %H:%M:%S")))
+    except Exception:
+        return 0.0
+
+
+def _dispatch_message_exists(session_root: Path, role: str, message_id: str) -> bool:
+    mid = str(message_id or "").strip()
+    r = str(role or "").strip()
+    if not mid or not r:
+        return False
+    candidates = [
+        session_root / "bus" / "inbox" / r / f"{mid}.md",
+        session_root / "state" / "archive" / r / f"{mid}.md",
+        session_root / "bus" / "deadletter" / r / f"{mid}.md",
+        session_root / "state" / "done" / f"{mid}.{r}.ok",
+        session_root / "bus" / "outbox" / f"{mid}.{r}.md",
+    ]
+    return any(p.exists() for p in candidates)
+
+
+def _dispatch_stale(session_root: Path, role: str, dispatch: Dict[str, object]) -> Tuple[bool, str]:
+    mid = str(dispatch.get("message_id", "")).strip()
+    if not mid:
+        return True, "missing_message_id"
+    if _dispatch_message_exists(session_root, role, mid):
+        return False, "message_present"
+    at_ts = _parse_ts(str(dispatch.get("at", "")).strip())
+    age_s = float("inf") if at_ts <= 0 else max(0.0, time.time() - at_ts)
+    if age_s >= float(TASK_DISPATCH_STALE_SECONDS):
+        return True, f"stale_missing age_s={int(age_s)} ttl_s={TASK_DISPATCH_STALE_SECONDS}"
+    return False, f"missing_but_young age_s={int(age_s)} ttl_s={TASK_DISPATCH_STALE_SECONDS}"
 
 
 def _pid_alive(pid: int) -> bool:
@@ -298,7 +338,9 @@ def list_dispatchable_tasks(session_root: Path, owner: str = "") -> List[Dict[st
             continue
         dispatch = t.get("dispatch")
         if isinstance(dispatch, dict) and str(dispatch.get("message_id", "")).strip():
-            continue
+            stale, _ = _dispatch_stale(session_root, role, dispatch)
+            if not stale:
+                continue
         ok, _ = _deps_satisfied(board, t)
         if not ok:
             continue
@@ -382,7 +424,13 @@ def set_dispatch(
             if prev_mid:
                 if prev_mid == message_id.strip():
                     return (True, task, "already_dispatched_same"), False
-                return (False, task, "already_dispatched"), False
+                status = str(task.get("status", "")).strip()
+                prev_to = str(prev.get("to", "")).strip() or to_role.strip()
+                stale, stale_reason = _dispatch_stale(session_root, prev_to, prev)
+                if status == "pending" and stale:
+                    _history(task, action="redispatched", by=from_role.strip() or "system", note=stale_reason)
+                else:
+                    return (False, task, "already_dispatched"), False
         task["dispatch"] = {
             "from": from_role.strip(),
             "to": to_role.strip(),
