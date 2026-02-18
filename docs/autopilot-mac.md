@@ -56,6 +56,7 @@ env_key_instructions = "export GLM_AUTH='Bearer <YOUR_KEY>'"
   - `sessions/<id>/state/processing/`
   - `sessions/<id>/state/done/`
   - `sessions/<id>/state/archive/<role>/`
+  - `sessions/<id>/state/tasks/tasks.json`（任务状态机）
 - Autopilot 状态：
   - `sessions/<id>/artifacts/autopilot/`
 
@@ -65,6 +66,19 @@ env_key_instructions = "export GLM_AUTH='Bearer <YOUR_KEY>'"
 
 ```bash
 ./scripts/autopilot.sh start <session-id>
+```
+
+macOS 下默认会使用 `kqueue` 监听 inbox/outbox 目录变化以降低延迟；如需禁用（兼容性排查）：
+
+```bash
+export AUTOPILOT_USE_KQUEUE=0
+export ROUTER_USE_KQUEUE=0
+```
+
+默认并行执行（更接近 Claude Code team 模式）。如需保守串行（全局锁）：
+
+```bash
+./scripts/autopilot.sh start <session-id> 2 --serial
 ```
 
 如需强制指定模型（当 `~/.codex/config.toml` 里配置了不可用 model 时）：
@@ -96,13 +110,24 @@ env_key_instructions = "export GLM_AUTH='Bearer <YOUR_KEY>'"
 
 ## 触发规则（简化）
 - 只要 `bus/inbox/<role>/` 里有消息，worker 就会自动取出并执行。
+- `lead` 收到 `intent: bootstrap` 时会先走确定性任务规划：
+  - 读取 `shared/task.md`
+  - 自动创建 `state/tasks/tasks.json` 任务图（implement -> review/test 依赖）
+  - 自动派发当前可执行任务（通常先到 builder）
+- 当某个 `task_id` 完成后，Autopilot 会自动派发被依赖解锁的后续任务。
 
 ## 如何投递消息（不需要手动输入到终端里）
 
 你可以直接把消息文件写到 `bus/inbox/<role>/`（见 `docs/bus.md`），或用脚本生成：
 
 ```bash
-./scripts/bus-send.sh --session <id> --from lead --to builder-a --intent implement --message "..." --accept "..." --risk medium
+./scripts/bus-send.sh --session <id> --from lead --to builder-a --intent implement --task <task_id> --message "..." --accept "..." --risk medium
+```
+
+任务状态查看（对标 Team 的 pending/in_progress/completed）：
+
+```bash
+python3 ./scripts/tasks.py list --session <id>
 ```
 
 ## 注意

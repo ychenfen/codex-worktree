@@ -32,6 +32,7 @@ HEARTBEAT_SECONDS = 30.0
 DISPATCH_SCAN_SECONDS = float(os.environ.get("AUTOPILOT_DISPATCH_SCAN_SECONDS", "5"))
 DISPATCH_MAX_PER_SCAN = int(os.environ.get("AUTOPILOT_DISPATCH_MAX_PER_SCAN", "3"))
 LOG = logging.getLogger("autopilot")
+USE_KQUEUE = (sys.platform == "darwin") and (os.environ.get("AUTOPILOT_USE_KQUEUE", "1") != "0")
 
 
 @dataclass
@@ -110,6 +111,48 @@ def _signal_process_context(*, session: str, role: str) -> str:
         f"session={session} role={role} pid={pid} ppid={ppid} pgid={pgid} sid={sid} "
         f"cwd={cwd} ps=\"{ps_line}\""
     )
+
+
+def _wait_for_dir_change(path: Path, timeout_s: float) -> None:
+    if timeout_s <= 0:
+        return
+    if not USE_KQUEUE or not path.is_dir():
+        time.sleep(timeout_s)
+        return
+    try:
+        import select  # local import: only supported on some platforms
+
+        oflag = getattr(os, "O_EVTONLY", os.O_RDONLY)
+        fd = os.open(str(path), oflag)
+        try:
+            kq = select.kqueue()
+            try:
+                ev = select.kevent(
+                    fd,
+                    filter=select.KQ_FILTER_VNODE,
+                    flags=select.KQ_EV_ADD | select.KQ_EV_CLEAR,
+                    fflags=(
+                        select.KQ_NOTE_WRITE
+                        | select.KQ_NOTE_EXTEND
+                        | select.KQ_NOTE_ATTRIB
+                        | select.KQ_NOTE_RENAME
+                        | select.KQ_NOTE_DELETE
+                    ),
+                )
+                kq.control([ev], 0, 0)
+                kq.control(None, 1, timeout_s)
+            finally:
+                try:
+                    kq.close()
+                except Exception:
+                    pass
+        finally:
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+    except Exception:
+        time.sleep(timeout_s)
 
 
 def _run(cmd: List[str], cwd: Optional[Path] = None, timeout_s: Optional[float] = None) -> str:
@@ -1527,7 +1570,7 @@ def daemon(session: str, role: str, poll_s: float, dry_run: bool, *, model: str)
                 runtime_state=runtime_state,
             )
             if not did:
-                time.sleep(poll_s)
+                _wait_for_dir_change(inbox_dir(sp, role), poll_s)
     except KeyboardInterrupt:
         rc = 130
         LOG.error(
