@@ -107,12 +107,15 @@ mac 上用 `./scripts/autopilot.sh start <sid>` 会自动启动 router 守护进
 ::bus-send{to="reviewer" intent="review" risk="low" message="请评审这次改动：..."}
 ::bus-send{to="tester" intent="test" risk="low" message="请验收：..." accept="pytest -q"}
 ::bus-send{to="builder-a" intent="fix" risk="high" message="必改：..." accept="pytest -q"}
+::bus-send{to="reviewer,tester" intent="info" risk="low" message="同步：..."}
+::bus-send{to="all" intent="info" risk="low" message="广播：..."}
 ```
 
 说明：
 - 指令只在回执里生效（即 worker 完成一次处理后写入 `bus/outbox` 的最后输出）。
 - Router 会对回执做 hash 去重，避免重复派工。
 - 保护规则：非 Lead 角色默认不允许派发 `intent="implement"`（避免无限扩散的“自生任务”）。
+- `to` 支持多目标：`to="r1,r2"`（逗号分隔）与广播：`to="all"`（发送给除发送者外的所有角色）。
 
 ## Autopilot
 
@@ -126,3 +129,16 @@ Autopilot 守护进程会轮询 `bus/inbox/<role>/`：
 补充（任务状态机模式）：
 - `lead/bootstrap` 会自动把 `shared/task.md` 变成任务图并写入 `state/tasks/tasks.json`。
 - 任务完成时会自动检查 `depends_on`，把新解锁的任务自动投递到对应 `bus/inbox/<owner>/`。
+
+## bus-send.sh（CLI 发消息）
+
+```bash
+./scripts/bus-send.sh --session <sid> --from <role> --to <role>
+./scripts/bus-send.sh --session <sid> --from <role> --to reviewer,tester
+./scripts/bus-send.sh --session <sid> --from <role> --to all
+./scripts/bus-send.sh --session <sid> --from <role> --to reviewer --to tester
+```
+
+说明：
+- `--to` 支持多次指定；也支持逗号分隔；`all` 表示广播到所有角色（排除 `--from` 本人）。
+- 若同时使用 `--task <task_id>` 且目标不止一个，脚本会警告并跳过 task dispatch 更新（避免 task_id 绑定到多条消息产生歧义）。

@@ -656,6 +656,8 @@ def parse_bus_send_directives(text: str) -> List[Dict[str, str]]:
     """
     Parse directives from receipt/body:
       ::bus-send{to="reviewer" intent="review" risk="low" message="..."}
+      ::bus-send{to="all" intent="info" risk="low" message="..."}
+      ::bus-send{to="reviewer,tester" intent="test" risk="low" message="..."}
     """
     out: List[Dict[str, str]] = []
     for m in re.finditer(r"::bus-send\{([^}]*)\}", text):
@@ -684,6 +686,32 @@ def valid_role(roles: List[str], r: str) -> bool:
     return bool(r) and r in roles
 
 
+def parse_target_roles(roles: List[str], to_expr: str, *, sender_role: str) -> List[str]:
+    """
+    Resolve a directive target expression into concrete roles.
+
+    Supported:
+    - to="lead" (single)
+    - to="reviewer,tester" (multi)
+    - to="all" (broadcast to all roles except sender_role)
+    """
+    to_expr = (to_expr or "").strip()
+    if not to_expr:
+        return []
+
+    out: List[str] = []
+    parts = [p for p in re.split(r"[,\s]+", to_expr) if p]
+    for p in parts:
+        if p.lower() == "all":
+            for r in roles:
+                if r != sender_role and r not in out:
+                    out.append(r)
+            continue
+        if valid_role(roles, p) and p not in out:
+            out.append(p)
+    return out
+
+
 def dispatch_from_receipt(
     sp: SessionPaths,
     roles: List[str],
@@ -695,25 +723,12 @@ def dispatch_from_receipt(
     dry_run: bool,
 ) -> None:
     for d in directives:
-        to_role = (d.get("to") or "").strip()
+        to_expr = (d.get("to") or "").strip()
         intent = (d.get("intent") or "").strip()
         risk = (d.get("risk") or "low").strip()
         message = (d.get("message") or "").strip()
         accept = (d.get("accept") or "").strip()
 
-        if not valid_role(roles, to_role):
-            # Invalid target: notify lead only.
-            if not dry_run and "lead" in roles:
-                enqueue_bus_message(
-                    sp,
-                    to_role="lead",
-                    from_role="router",
-                    intent="alert",
-                    thread=thread,
-                    risk="medium",
-                    body=f'Invalid ::bus-send target role "{to_role}" from receipt {receipt_id} (worker={worker_role}).',
-                )
-            continue
         if not allowed_intent(worker_role, intent):
             if not dry_run and "lead" in roles:
                 enqueue_bus_message(
@@ -727,6 +742,21 @@ def dispatch_from_receipt(
                 )
             continue
         if not message:
+            continue
+
+        targets = parse_target_roles(roles, to_expr, sender_role=worker_role)
+        if not targets:
+            # Invalid/no targets: notify lead only.
+            if not dry_run and "lead" in roles:
+                enqueue_bus_message(
+                    sp,
+                    to_role="lead",
+                    from_role="router",
+                    intent="alert",
+                    thread=thread,
+                    risk="medium",
+                    body=f'Invalid ::bus-send target "{to_expr}" from receipt {receipt_id} (worker={worker_role}).',
+                )
             continue
 
         body = "\n".join(
@@ -744,15 +774,16 @@ def dispatch_from_receipt(
             body += "\nAcceptance:\n- " + accept + "\n"
 
         if not dry_run:
-            enqueue_bus_message(
-                sp,
-                to_role=to_role,
-                from_role=worker_role,
-                intent=intent,
-                thread=thread,
-                risk=risk or "low",
-                body=body,
-            )
+            for to_role in targets:
+                enqueue_bus_message(
+                    sp,
+                    to_role=to_role,
+                    from_role=worker_role,
+                    intent=intent,
+                    thread=thread,
+                    risk=risk or "low",
+                    body=body,
+                )
 
 
 def process_receipt(sp: SessionPaths, roles: List[str], receipt_path: Path, dry_run: bool) -> bool:

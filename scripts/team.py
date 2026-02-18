@@ -461,29 +461,33 @@ def repl(session: str) -> int:
                 print("usage: /send <to> <intent> <msg> [--task <id>]")
                 continue
             to_role, intent, msg = parts
-            if to_role not in roles:
+            if to_role != "all" and to_role not in roles:
                 print(f"invalid role: {to_role}")
                 continue
-            p = enqueue_message(
-                sp,
-                to_role=to_role,
-                from_role="user",
-                intent=intent,
-                thread=session,
-                risk="low",
-                body=msg,
-                task_id=task_id,
-            )
-            if task_id:
-                set_dispatch(
-                    sp.session_root,
-                    task_id=task_id,
+            targets = roles if to_role == "all" else [to_role]
+            if task_id and len(targets) != 1:
+                print("warn: --task is set but /send all targets multiple roles; skipping task dispatch update")
+            for t in targets:
+                p = enqueue_message(
+                    sp,
+                    to_role=t,
                     from_role="user",
-                    to_role=to_role,
                     intent=intent,
-                    message_id=p.stem,
+                    thread=session,
+                    risk="low",
+                    body=msg,
+                    task_id=task_id,
                 )
-            print(f"enqueued -> {to_role}")
+                if task_id and len(targets) == 1:
+                    set_dispatch(
+                        sp.session_root,
+                        task_id=task_id,
+                        from_role="user",
+                        to_role=t,
+                        intent=intent,
+                        message_id=p.stem,
+                    )
+                print(f"enqueued -> {t}")
             continue
 
         if line.startswith("/outbox"):

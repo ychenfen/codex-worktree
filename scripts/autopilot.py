@@ -1483,18 +1483,36 @@ def daemon(session: str, role: str, poll_s: float, dry_run: bool, *, model: str)
             if now >= next_hb:
                 log_heartbeat(sp, session=session, role=role, poll_s=poll_s)
                 next_hb = now + HEARTBEAT_SECONDS
-            if role == "lead" and now >= next_dispatch:
-                try:
-                    sent = dispatch_ready_tasks(
-                        sp,
-                        session=session,
-                        roles=roles,
-                        from_role="lead",
-                    )
-                    if sent:
-                        LOG.info("lead_periodic_dispatch session=%s sent=%s", session, ",".join(sent))
-                except Exception:
-                    LOG.exception("lead_periodic_dispatch_failed session=%s", session)
+            if now >= next_dispatch:
+                if role == "lead":
+                    try:
+                        sent = dispatch_ready_tasks(
+                            sp,
+                            session=session,
+                            roles=roles,
+                            from_role="lead",
+                        )
+                        if sent:
+                            LOG.info("lead_periodic_dispatch session=%s sent=%s", session, ",".join(sent))
+                    except Exception:
+                        LOG.exception("lead_periodic_dispatch_failed session=%s", session)
+                else:
+                    # Self-claim fallback (Claude-like): if lead is down, each role can
+                    # still pick up dispatchable tasks owned by itself.
+                    try:
+                        inbox_count = _count_md_files(sp.bus / "inbox" / role)
+                        if inbox_count == 0:
+                            sent = dispatch_ready_tasks(
+                                sp,
+                                session=session,
+                                roles=roles,
+                                from_role=role,
+                                owner=role,
+                            )
+                            if sent:
+                                LOG.info("role_self_dispatch session=%s role=%s sent=%s", session, role, ",".join(sent))
+                    except Exception:
+                        LOG.exception("role_self_dispatch_failed session=%s role=%s", session, role)
                 next_dispatch = now + DISPATCH_SCAN_SECONDS
             did = process_one(
                 sp,
