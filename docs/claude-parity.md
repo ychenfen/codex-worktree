@@ -27,7 +27,7 @@ Legend:
 - ✅ inbox/outbox 文件队列（原子写入 + 幂等 done）
 - ✅ Router 回执转发（outbox -> inbox），支持 `::bus-send{...}` 自动接力
 - ✅ 多目标投递：`to="r1,r2"` 与广播 `to="all"`（排除发送者）
-- ❌ 事件驱动投递（Claude“自动送达”更像 push；本项目仍以 poll 为主）
+- 🟡 事件驱动投递（mac：kqueue 监听目录变更以降低延迟；仍保留扫描逻辑与 poll fallback）
 
 ### 4) 竞争与无冲突
 - ✅ 单消息目录锁：`state/processing/<id>.<role>.lockdir`
@@ -69,4 +69,3 @@ Phase 3 (产品级体验):
 - team REPL：默认目标 `/to <role>`、@mention、/claim /reassign /retry
 - web/TUI 面板：任务板、队列、吞吐与成本可视化
 - 多模型策略（便宜模型规划/路由，强模型实现/评审）+ 回归评测集
-

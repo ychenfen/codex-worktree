@@ -68,6 +68,13 @@ env_key_instructions = "export GLM_AUTH='Bearer <YOUR_KEY>'"
 ./scripts/autopilot.sh start <session-id>
 ```
 
+macOS 下默认会使用 `kqueue` 监听 inbox/outbox 目录变化以降低延迟；如需禁用（兼容性排查）：
+
+```bash
+export AUTOPILOT_USE_KQUEUE=0
+export ROUTER_USE_KQUEUE=0
+```
+
 默认并行执行（更接近 Claude Code team 模式）。如需保守串行（全局锁）：
 
 ```bash
