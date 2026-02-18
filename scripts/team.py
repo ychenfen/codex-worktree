@@ -283,7 +283,11 @@ def repl(session: str) -> int:
         "Commands: /help, /task <text>, /accept <line>, /bootstrap, /tasks [status], /tadd <role> <title>, "
         "/to <role>, /send <to> <intent> <msg> [--task <id>], /outbox, /status, /sh <cmd>, /exit"
     )
-    print('Default: plain text is sent to lead as a chat message (Claude Code-like). Use /to <role> to change target. Use /task + /bootstrap for actionable work.')
+    print(
+        'Default: plain text is sent to lead as a chat message (Claude Code-like). '
+        'Use /to <role> to change target. Use @<role> <msg> or @all <msg> for one-off. '
+        'Use /task + /bootstrap for actionable work.'
+    )
 
     accept_buf: List[str] = []
     seen: Dict[str, float] = {}
@@ -340,6 +344,7 @@ def repl(session: str) -> int:
             print("  /tasks [status]        list task-board entries (status: pending,in_progress,completed,failed)")
             print("  /tadd <role> <title>   create a pending task and dispatch implement message with task_id")
             print("  /to <role>             set default chat target for plain text (default: lead)")
+            print("  @<role> <msg>          one-off message to role (or @all <msg>)")
             print("  /send <to> <intent> <msg> [--task <id>]  send a bus message (optional task binding)")
             print("  /outbox                show last 5 receipts")
             print("  /status                show basic session paths")
@@ -545,6 +550,29 @@ def repl(session: str) -> int:
 
         if line.startswith("/exit"):
             return 0
+
+        m = re.match(r"^@([A-Za-z0-9_\\-]+)\\s+(.+)$", line.strip())
+        if m:
+            target = m.group(1).strip()
+            msg = m.group(2).strip()
+            if not msg:
+                continue
+            targets = roles if target == "all" else ([target] if target in roles else [])
+            if not targets:
+                print(f"invalid role: {target}")
+                continue
+            for t in targets:
+                enqueue_message(
+                    sp,
+                    to_role=t,
+                    from_role="user",
+                    intent="question",
+                    thread=session,
+                    risk="low",
+                    body=msg,
+                )
+                print(f"sent -> {t}")
+            continue
 
         # Default: chat to the current target (do not overwrite shared/task.md unexpectedly).
         enqueue_message(

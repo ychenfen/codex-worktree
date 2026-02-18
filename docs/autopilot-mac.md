@@ -138,6 +138,23 @@ export ROUTER_USE_KQUEUE=0
   - 自动派发当前可执行任务（通常先到 builder）
 - 当某个 `task_id` 完成后，Autopilot 会自动派发被依赖解锁的后续任务。
 
+## 角色硬边界（推荐开启，默认开启）
+
+为对标/超越 team 模式的“权限控制面”，Autopilot 默认启用 **worktree 级硬边界**：
+- 非 Builder 角色（lead/reviewer/tester）如果在自己的 worktree 里产生了新的 git 变更，会被判定为越界；
+- 该条消息会被直接 deadletter，并在对应 `*.log` 与回执里留下证据（`codex_rc=97`）。
+
+配置：
+
+```bash
+# enforce|warn|off
+export AUTOPILOT_ROLE_BOUNDARY_MODE=enforce
+```
+
+说明：
+- `warn` 只记录日志不阻断（不推荐用于无人值守）。
+- `off` 完全关闭硬边界（仅在调试/临时放权时使用）。
+
 ## 如何投递消息（不需要手动输入到终端里）
 
 你可以直接把消息文件写到 `bus/inbox/<role>/`（见 `docs/bus.md`），或用脚本生成：
