@@ -30,6 +30,7 @@ DEFAULT_FALLBACK_MODELS = ["gpt-5.2-codex", "gpt-5.2", "gpt-5.1-codex-max"]
 LOCK_STALE_SECONDS = int(os.environ.get("AUTOPILOT_LOCK_STALE_SECONDS", "21600"))
 HEARTBEAT_SECONDS = 30.0
 DISPATCH_SCAN_SECONDS = float(os.environ.get("AUTOPILOT_DISPATCH_SCAN_SECONDS", "5"))
+DISPATCH_MAX_PER_SCAN = int(os.environ.get("AUTOPILOT_DISPATCH_MAX_PER_SCAN", "3"))
 LOG = logging.getLogger("autopilot")
 
 
@@ -803,6 +804,8 @@ def dispatch_ready_tasks(
     sent: List[str] = []
     role_set = set(roles)
     for task in list_dispatchable_tasks(sp.session_root, owner=owner):
+        if DISPATCH_MAX_PER_SCAN > 0 and len(sent) >= DISPATCH_MAX_PER_SCAN:
+            break
         tid = str(task.get("id", "")).strip()
         to_role = str(task.get("owner", "")).strip()
         if not tid or not to_role or to_role not in role_set:

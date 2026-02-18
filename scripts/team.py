@@ -279,11 +279,15 @@ def repl(session: str) -> int:
         mkdirp(sp.bus_inbox / r)
 
     print(f"Team CLI attached: {session}")
-    print("Commands: /help, /task <text>, /accept <line>, /bootstrap, /tasks [status], /tadd <role> <title>, /send <to> <intent> <msg> [--task <id>], /outbox, /status, /sh <cmd>, /exit")
-    print('Default: plain text is sent to lead as a chat message (Claude Code-like). Use /task + /bootstrap for actionable work.')
+    print(
+        "Commands: /help, /task <text>, /accept <line>, /bootstrap, /tasks [status], /tadd <role> <title>, "
+        "/to <role>, /send <to> <intent> <msg> [--task <id>], /outbox, /status, /sh <cmd>, /exit"
+    )
+    print('Default: plain text is sent to lead as a chat message (Claude Code-like). Use /to <role> to change target. Use /task + /bootstrap for actionable work.')
 
     accept_buf: List[str] = []
     seen: Dict[str, float] = {}
+    default_to = "lead"
 
     # Default behavior: show only NEW receipts after attaching (Claude Code-like).
     # Historical receipts can still be viewed with /outbox.
@@ -335,6 +339,7 @@ def repl(session: str) -> int:
             print("  /bootstrap             send bootstrap to lead (auto-plan tasks graph from shared/task.md)")
             print("  /tasks [status]        list task-board entries (status: pending,in_progress,completed,failed)")
             print("  /tadd <role> <title>   create a pending task and dispatch implement message with task_id")
+            print("  /to <role>             set default chat target for plain text (default: lead)")
             print("  /send <to> <intent> <msg> [--task <id>]  send a bus message (optional task binding)")
             print("  /outbox                show last 5 receipts")
             print("  /status                show basic session paths")
@@ -450,6 +455,19 @@ def repl(session: str) -> int:
             print(f"enqueued -> {to_role} ({p.name})")
             continue
 
+        if line.startswith("/to"):
+            arg = line[len("/to") :].strip()
+            if not arg:
+                print(f"default_to: {default_to}")
+                continue
+            to_role = arg.strip()
+            if to_role not in roles:
+                print(f"invalid role: {to_role}")
+                continue
+            default_to = to_role
+            print(f"default_to: {default_to}")
+            continue
+
         if line.startswith("/send "):
             payload = line[len("/send ") :].strip()
             task_id = ""
@@ -528,17 +546,17 @@ def repl(session: str) -> int:
         if line.startswith("/exit"):
             return 0
 
-        # Default: chat to lead (do not overwrite shared/task.md unexpectedly).
+        # Default: chat to the current target (do not overwrite shared/task.md unexpectedly).
         enqueue_message(
             sp,
-            to_role="lead",
+            to_role=default_to,
             from_role="user",
             intent="question",
             thread=session,
             risk="low",
             body=line.strip(),
         )
-        print("sent -> lead")
+        print(f"sent -> {default_to}")
 
 
 def main() -> int:
