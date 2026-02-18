@@ -81,6 +81,28 @@ export ROUTER_USE_KQUEUE=0
 ./scripts/autopilot.sh start <session-id> 2 --serial
 ```
 
+## 常驻守护（launchd，推荐）
+
+如果你希望达到 “Claude Code 一样常驻/掉线自愈/关终端不影响” 的体验，建议用 `launchd` 安装一个用户级 LaunchAgent（本质是前台 supervisor，负责维持 router + role daemons）。
+
+安装：
+
+```bash
+./scripts/launchd.sh install <session-id> 2 --model <model>
+```
+
+查看：
+
+```bash
+./scripts/launchd.sh status <session-id>
+```
+
+卸载：
+
+```bash
+./scripts/launchd.sh uninstall <session-id>
+```
+
 如需强制指定模型（当 `~/.codex/config.toml` 里配置了不可用 model 时）：
 
 ```bash

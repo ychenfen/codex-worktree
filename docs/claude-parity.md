@@ -40,7 +40,7 @@ Legend:
 - ✅ 心跳（30s）：包含 session/role/pid/队列计数/最近任务
 - ✅ 退出可解释：SIGNAL/EXIT/FATAL + 上下文（pid/ppid/pgid/sid/ps）
 - ✅ 一页诊断：`./scripts/diag.sh <sid>`
-- 🟡 常驻守护（launchd 集成）：目前依赖终端启动；可作为超越项
+- 🟡 常驻守护（launchd 集成）：提供 `./scripts/launchd.sh` 一键 install/uninstall（用户级 LaunchAgent）
 
 ### 6) 权限与安全（Claude 的“可控边界”）
 - 🟡 软边界（prompt 约束）：角色职责/可写文件范围
