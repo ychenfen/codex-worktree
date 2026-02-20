@@ -16,3 +16,6 @@ sessions/*/artifacts/*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Finder duplicate copies (e.g. "file 2.ext")
+* 2.*
