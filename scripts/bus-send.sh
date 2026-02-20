@@ -93,6 +93,15 @@ expand_targets() {
   local out=()
   local raw part p
   local roles=()
+  contains_role() {
+    local needle="$1"
+    shift
+    local item
+    for item in "$@"; do
+      [[ "$item" == "$needle" ]] && return 0
+    done
+    return 1
+  }
   while read -r p; do
     [[ -n "${p:-}" ]] && roles+=("$p")
   done < <(list_session_roles || true)
@@ -102,25 +111,26 @@ expand_targets() {
     for p in "${part[@]}"; do
       p="$(printf '%s' "$p" | tr -d '[:space:]')"
       [[ -n "$p" ]] || continue
-      if [[ "${p,,}" == "all" ]]; then
+      p_lower="$(printf '%s' "$p" | tr '[:upper:]' '[:lower:]')"
+      if [[ "$p_lower" == "all" ]]; then
         if [[ ${#roles[@]} -eq 0 ]]; then
           echo "error: --to all requires an existing session with roles/: $SESSION_ROOT" >&2
           exit 2
         fi
         for r in "${roles[@]}"; do
           [[ "$r" == "$FROM" ]] && continue
-          if [[ ! " ${out[*]} " =~ " ${r} " ]]; then
+          if ! contains_role "$r" "${out[@]-}"; then
             out+=("$r")
           fi
         done
       else
-        if [[ ! " ${out[*]} " =~ " ${p} " ]]; then
+        if ! contains_role "$p" "${out[@]-}"; then
           out+=("$p")
         fi
       fi
     done
   done
-  printf '%s\n' "${out[@]}"
+  printf '%s\n' "${out[@]-}"
 }
 
 targets=()
